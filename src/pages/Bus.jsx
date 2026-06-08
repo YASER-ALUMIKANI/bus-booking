@@ -19,8 +19,11 @@ const Bus = () => {
   const [phone, setPhone] = useState('')
   const [passport, setPassport] = useState('')
   const [travelDate, setTravelDate] = useState('')
+  const [bookingDate, setBookingDate] = useState('')
+  const [company, setCompany] = useState('البركة')
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
+  const [ticketData, setTicketData] = useState(null)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
 
@@ -44,7 +47,9 @@ const Bus = () => {
       passengerName,
       phone,
       passport,
+      bookingDate,
       travelDate,
+      company,
       origin,
       destination,
       guest: true,
@@ -65,7 +70,19 @@ const Bus = () => {
       }
 
       setStatus('success')
+      setTicketData({
+        ticketNumber: `T-${Date.now().toString().slice(-6)}`,
+        passengerName,
+        phone,
+        passport,
+        bookingDate,
+        travelDate,
+        company,
+        origin,
+        destination,
+      })
       setPassport('')
+      setBookingDate('')
       setTravelDate('')
       setOrigin('')
       setDestination('')
@@ -123,15 +140,47 @@ const Bus = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">تاريخ الحجز</label>
-                <input
-                  type="date"
-                  value={travelDate}
-                  onChange={(e) => setTravelDate(e.target.value)}
-                  required
-                  className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
-                />
+              <div className="grid gap-5 md:grid-cols-[1fr_200px] items-start">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">تاريخ الحجز</label>
+                    <input
+                      type="date"
+                      value={bookingDate}
+                      onChange={(e) => setBookingDate(e.target.value)}
+                      required
+                      className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">تاريخ المغادرة</label>
+                    <input
+                      type="date"
+                      value={travelDate}
+                      onChange={(e) => setTravelDate(e.target.value)}
+                      required
+                      className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">شركة النقل</label>
+                  <div className="flex flex-col space-y-2 bg-white dark:bg-neutral-950 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
+                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+                      <input type="radio" name="company" value="البركة" checked={company==='البركة'} onChange={() => setCompany('البركة')} className="form-radio text-violet-600" />
+                      <span className="text-neutral-700 dark:text-neutral-300">البركة</span>
+                    </label>
+                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+                      <input type="radio" name="company" value="المتصدر" checked={company==='المتصدر'} onChange={() => setCompany('المتصدر')} className="form-radio text-violet-600" />
+                      <span className="text-neutral-700 dark:text-neutral-300">المتصدر</span>
+                    </label>
+                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+                      <input type="radio" name="company" value="البراق" checked={company==='البراق'} onChange={() => setCompany('البراق')} className="form-radio text-violet-600" />
+                      <span className="text-neutral-700 dark:text-neutral-300">البراق</span>
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <div className="grid gap-5 md:grid-cols-2">
@@ -170,8 +219,55 @@ const Bus = () => {
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               )}
 
-              {status === 'success' && (
-                <p className="text-sm text-green-700 dark:text-green-300">تم إرسال الطلب بنجاح. سيصل إشعار إلى المسؤول.</p>
+              {ticketData && (
+                <>
+                  <style>{`@media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; top: 0; left: 0; width: 100%; background: white; } .no-print { display: none !important; } }`}</style>
+                  <div className="print-area rounded-3xl border border-violet-200 dark:border-neutral-800 bg-violet-50 dark:bg-neutral-950 p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-semibold">تذكرة مبدئية</h3>
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400">احفظ أو اطبع هذه التذكرة بعد تأكيد الحجز.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="no-print rounded-full bg-violet-600 px-4 py-2 text-white text-sm font-semibold hover:bg-violet-700 transition"
+                      >
+                        طباعة
+                      </button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">رقم التذكرة</p>
+                        <p className="text-lg font-semibold">{ticketData.ticketNumber}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">شركة النقل</p>
+                        <p className="text-lg font-semibold">{ticketData.company}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">اسم المسافر</p>
+                        <p className="text-lg font-semibold">{ticketData.passengerName}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">رقم الجوال</p>
+                        <p className="text-lg font-semibold">{ticketData.phone}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">تاريخ الحجز</p>
+                        <p className="text-lg font-semibold">{ticketData.bookingDate}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">تاريخ المغادرة</p>
+                        <p className="text-lg font-semibold">{ticketData.travelDate}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4 sm:col-span-2">
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">الرحلة</p>
+                        <p className="text-lg font-semibold">من {ticketData.origin} إلى {ticketData.destination}</p>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
 
               <button
