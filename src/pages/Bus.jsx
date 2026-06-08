@@ -33,6 +33,56 @@ const Bus = () => {
     if (storedPhone) setPhone(storedPhone)
   }, [])
 
+  const openPrintWindow = (ticket) => {
+    if (typeof window === 'undefined') return
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
+    if (!printWindow) return
+
+    const html = `
+      <html lang="ar">
+      <head>
+        <meta charset="UTF-8" />
+        <title>تذكرة مبدئية</title>
+        <style>
+          body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; direction: rtl; background: #f3f2ff; color: #111827; }
+          .page { padding: 2rem; max-width: 840px; margin: auto; }
+          .card { background: #ffffff; border-radius: 1.5rem; padding: 2rem; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.1); }
+          .title { font-size: 1.9rem; margin-bottom: 1.5rem; font-weight: 700; }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+          .item { padding: 1.2rem; border: 1px solid #e5e7eb; border-radius: 1rem; background: #fafafa; }
+          .label { display: block; margin-bottom: 0.5rem; color: #6b7280; font-size: 0.9rem; }
+          .value { font-size: 1.15rem; font-weight: 700; word-break: break-word; }
+          .footer { margin-top: 1.75rem; text-align: center; }
+          .print-button { padding: 0.95rem 1.4rem; background: #7c3aed; border: none; border-radius: 9999px; color: white; font-size: 1rem; font-weight: 700; cursor: pointer; }
+          @media print { .print-button { display: none; } body { background: #fff; } }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          <div class="card">
+            <div class="title">تذكرة مبدئية</div>
+            <div class="grid">
+              <div class="item"><span class="label">رقم التذكرة</span><span class="value">${ticket.ticketNumber}</span></div>
+              <div class="item"><span class="label">شركة النقل</span><span class="value">${ticket.company}</span></div>
+              <div class="item"><span class="label">اسم المسافر</span><span class="value">${ticket.passengerName}</span></div>
+              <div class="item"><span class="label">رقم الجوال</span><span class="value">${ticket.phone}</span></div>
+              <div class="item"><span class="label">تاريخ المغادرة</span><span class="value">${ticket.travelDate}</span></div>
+              <div class="item" style="grid-column: span 2;"><span class="label">الرحلة</span><span class="value">من ${ticket.origin} إلى ${ticket.destination}</span></div>
+            </div>
+            <div class="footer">
+              <button class="print-button" onclick="window.print()">طباعة هذه الصفحة</button>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.focus()
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (origin === destination) {
@@ -66,8 +116,7 @@ const Bus = () => {
         throw new Error(data.message || 'فشل إرسال الطلب. حاول مرة أخرى.')
       }
 
-      setStatus('success')
-      setTicketData({
+      const ticket = {
         ticketNumber: `T-${Date.now().toString().slice(-6)}`,
         passengerName,
         phone,
@@ -76,7 +125,10 @@ const Bus = () => {
         company,
         origin,
         destination,
-      })
+      }
+      setStatus('success')
+      setTicketData(ticket)
+      openPrintWindow(ticket)
       setPassport('')
       setTravelDate('')
       setOrigin('')
@@ -250,13 +302,6 @@ const Bus = () => {
                         <h3 className="text-xl font-semibold">تذكرة مبدئية</h3>
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">احفظ أو اطبع هذه التذكرة بعد تأكيد الحجز.</p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => window.print()}
-                        className="no-print rounded-full bg-violet-600 px-4 py-2 text-white text-sm font-semibold hover:bg-violet-700 transition"
-                      >
-                        طباعة
-                      </button>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
