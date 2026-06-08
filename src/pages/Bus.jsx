@@ -138,6 +138,7 @@ const Bus = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': '1',
         },
         body: JSON.stringify(payload),
       })

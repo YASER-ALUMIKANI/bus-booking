@@ -88,6 +88,7 @@ const AdminDashboard = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': '1',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(newUser),

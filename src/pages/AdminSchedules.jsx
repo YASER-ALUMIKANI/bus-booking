@@ -45,7 +45,11 @@ const AdminSchedules = () => {
       }
       const res = await fetch('/api/schedules', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': '1',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ travelDate: newDate }),
       })
       const data = await res.json()
@@ -64,7 +68,13 @@ const AdminSchedules = () => {
     try {
       const token = getToken()
       if (!token) { navigate('/admin/login'); return }
-      const res = await fetch(`/api/schedules/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+      const res = await fetch(`/api/schedules/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': '1',
+          Authorization: `Bearer ${token}`,
+        },
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'فشل الحذف')
       fetchSchedules()

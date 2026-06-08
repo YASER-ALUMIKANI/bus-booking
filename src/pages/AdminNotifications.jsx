@@ -88,6 +88,7 @@ const AdminNotifications = () => {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': '1',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status: newStatus, cancellationReason: reason.trim() }),
@@ -120,6 +121,7 @@ const AdminNotifications = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': '1',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ requested_status: requestedStatus, requested_cancellation_reason: reason.trim() }),
@@ -153,6 +155,7 @@ const AdminNotifications = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRF-Token': '1',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ password }),

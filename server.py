@@ -158,6 +158,14 @@ def require_token():
     return get_current_user()
 
 
+def require_csrf_token():
+    csrf_token = request.headers.get("X-CSRF-Token")
+    x_requested_with = request.headers.get("X-Requested-With")
+    if csrf_token == "1" or x_requested_with == "XMLHttpRequest":
+        return True
+    return False
+
+
 with app.app_context():
     init_db()
 
@@ -167,6 +175,9 @@ def create_booking():
     client_ip = get_client_ip()
     if is_rate_limited(client_ip):
         return jsonify({"message": "تم تجاوز الحد المسموح لعدد الطلبات. حاول مرة أخرى بعد قليل."}), 429
+
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
 
     if not request.is_json:
         return jsonify({"message": "Invalid request payload."}), 400
@@ -266,6 +277,8 @@ def create_admin_user():
     current_user = require_token()
     if not current_user:
         return jsonify({"message": "Unauthorized."}), 401
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
     if current_user["role"] != "manager":
         return jsonify({"message": "يجب أن يكون المدير لإنشاء مستخدم جديد."}), 403
 
@@ -316,6 +329,8 @@ def create_schedule():
     current_user = require_token()
     if not current_user:
         return jsonify({"message": "Unauthorized."}), 401
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
     if current_user.get("role") != "manager":
         return jsonify({"message": "يجب أن يكون المدير لإضافة جدول الرحلات."}), 403
 
@@ -341,6 +356,8 @@ def delete_schedule(schedule_id: int):
     current_user = require_token()
     if not current_user:
         return jsonify({"message": "Unauthorized."}), 401
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
     if current_user.get("role") != "manager":
         return jsonify({"message": "يجب أن يكون المدير لحذف جدول الرحلات."}), 403
     db = get_db()
@@ -357,6 +374,8 @@ def update_booking_status(booking_id: str):
     current_user = get_current_user()
     if not current_user:
         return jsonify({"message": "Unauthorized."}), 401
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
     role = current_user["role"]
 
     if not request.is_json:
@@ -397,6 +416,8 @@ def request_booking_change(booking_id: str):
     current_user = get_current_user()
     if not current_user:
         return jsonify({"message": "Unauthorized."}), 401
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
     role = current_user["role"]
 
     if not request.is_json:
@@ -436,6 +457,8 @@ def approve_booking_change(booking_id: str):
     current_user = get_current_user()
     if not current_user:
         return jsonify({"message": "Unauthorized."}), 401
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
 
     if current_user["role"] != "manager":
         return jsonify({"message": "يجب أن يقوم المدير بالموافقة على التغيير."}), 403
