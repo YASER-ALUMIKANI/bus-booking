@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 import secrets
 import sqlite3
@@ -23,6 +24,8 @@ DEFAULT_ADMIN_USERS = {
 TOKENS = {}
 
 VALID_STATUSES = {"pending", "confirmed", "cancelled"}
+VALID_COMPANIES = {"البركة", "المتصدر", "البراق"}
+VALID_CITIES = {"البيضاء", "صنعاء", "عدن", "تعز", "الحديدة", "ذمار", "الرياض", "جدة", "الدمام", "أبها", "مكة"}
 
 
 def get_db():
@@ -166,6 +169,57 @@ def require_csrf_token():
     return False
 
 
+def validate_passenger_name(name: str) -> bool:
+    if not isinstance(name, str):
+        return False
+    name = name.strip()
+    if len(name) < 3 or len(name) > 100:
+        return False
+    return bool(re.fullmatch(r"^[\u0600-\u06FF\u0621-\u064A\u0660-\u0669A-Za-z ]+$", name))
+
+
+def validate_phone(phone: str) -> bool:
+    if not isinstance(phone, str):
+        return False
+    phone = phone.strip()
+    return bool(re.fullmatch(r"^[0-9]{7,15}$", phone))
+
+
+def validate_passport(passport: str) -> bool:
+    if not isinstance(passport, str):
+        return False
+    passport = passport.strip()
+    return bool(re.fullmatch(r"^[A-Za-z0-9-]{5,20}$", passport))
+
+
+def validate_travel_date(value: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        from datetime import datetime
+        datetime.strptime(value, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def validate_company(company: str) -> bool:
+    return isinstance(company, str) and company.strip() in VALID_COMPANIES
+
+
+def validate_city(city: str) -> bool:
+    return isinstance(city, str) and city.strip() in VALID_CITIES
+
+
+def travel_date_available(travel_date: str) -> bool:
+    db = get_db()
+    row = db.execute(
+        "SELECT 1 FROM schedules WHERE travel_date = ?",
+        (travel_date,),
+    ).fetchone()
+    return row is not None
+
+
 with app.app_context():
     init_db()
 
@@ -189,13 +243,36 @@ def create_booking():
     travel_date = data.get("travelDate")
     origin = data.get("origin")
     destination = data.get("destination")
+    company = data.get("company")
     guest = data.get("guest", False)
 
-    if not all([passenger_name, phone, passport, travel_date, origin, destination]):
+    if not all([passenger_name, phone, passport, travel_date, origin, destination, company]):
         return jsonify({"message": "جميع الحقول مطلوبة."}), 400
+
+    origin = origin.strip()
+    destination = destination.strip()
+    company = company.strip()
 
     if origin == destination:
         return jsonify({"message": "يجب أن تكون الوجهة مختلفة عن نقطة الانطلاق."}), 400
+
+    if not validate_company(company):
+        return jsonify({"message": "شركة النقل غير صالحة."}), 400
+
+    if not validate_city(origin) or not validate_city(destination):
+        return jsonify({"message": "مكان الانطلاق أو الوجهة غير صالح."}), 400
+
+    if not validate_passenger_name(passenger_name):
+        return jsonify({"message": "اسم المسافر غير صالح. استخدم حروفاً ومسافات فقط، بين 3 و100 حرف."}), 400
+    if not validate_phone(phone):
+        return jsonify({"message": "رقم الجوال غير صالح. يجب أن يحتوي على 7 إلى 15 رقماً."}), 400
+    if not validate_passport(passport):
+        return jsonify({"message": "رقم الجواز غير صالح. استخدم أحرفاً وأرقاماً فقط، بين 5 و20 حرفاً."}), 400
+    if not validate_travel_date(travel_date):
+        return jsonify({"message": "تاريخ المغادرة غير صالح. استخدم الصيغة yyyy-mm-dd."}), 400
+
+    if not travel_date_available(travel_date):
+        return jsonify({"message": "تاريخ المغادرة غير متاح. اختر تاريخاً من التقويم المصرح به."}), 400
 
     booking_id = secrets.token_hex(8)
     db = get_db()

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import DatePicker from '../components/DatePicker/DatePicker'
 
 const cityOptions = [
- 'البيضاء ',
+  'البيضاء',
   'صنعاء',
   'عدن',
   'تعز',
@@ -14,6 +14,9 @@ const cityOptions = [
   'أبها',
   'مكة',
 ]
+
+const companyOptions = ['البركة', 'المتصدر', 'البراق']
+
 
 const Bus = () => {
   const [passengerName, setPassengerName] = useState('')
@@ -116,8 +119,41 @@ const Bus = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    if (origin === destination) {
+    const namePattern = /^[\u0600-\u06FF\u0621-\u064A\u0660-\u0669A-Za-z ]{3,100}$/
+    const phonePattern = /^[0-9]{7,15}$/
+    const passportPattern = /^[A-Za-z0-9-]{5,20}$/
+
+    const availableDateStrings = availableDates.map((d) => {
+      const value = d && (d.travelDate || d)
+      return typeof value === 'string' ? value.trim() : ''
+    }).filter(Boolean)
+
+    if (!namePattern.test(passengerName.trim())) {
+      setError('اسم المسافر غير صالح. استخدم حروفاً ومسافات فقط، بين 3 و100 حرف.')
+      return
+    }
+    if (!phonePattern.test(phone.trim())) {
+      setError('رقم الجوال غير صالح. يجب أن يحتوي على 7 إلى 15 رقماً.')
+      return
+    }
+    if (!passportPattern.test(passport.trim())) {
+      setError('رقم الجواز غير صالح. استخدم أحرفاً وأرقاماً فقط، بين 5 و20 حرفاً.')
+      return
+    }
+    if (!companyOptions.includes(company)) {
+      setError('شركة النقل غير صحيحة.')
+      return
+    }
+    if (!cityOptions.includes(origin.trim()) || !cityOptions.includes(destination.trim())) {
+      setError('اختر مدينة صالحة من القائمة.')
+      return
+    }
+    if (origin.trim() === destination.trim()) {
       setError('يجب أن تكون الوجهة مختلفة عن نقطة الانطلاق.')
+      return
+    }
+    if (!availableDateStrings.includes(travelDate)) {
+      setError('اختر تاريخ مغادرة صالحاً من التقويم.')
       return
     }
     setStatus('sending')
@@ -190,6 +226,10 @@ const Bus = () => {
                   value={passengerName}
                   onChange={(e) => setPassengerName(e.target.value)}
                   required
+                  minLength={3}
+                  maxLength={100}
+                  pattern="[\u0600-\u06FF\u0621-\u064A\u0660-\u0669A-Za-z ]+"
+                  title="الاسم يجب أن يحتوي على حروف ومسافات فقط ويكون بين 3 و100 حرف."
                   placeholder="اكتب اسم المسافر"
                   className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
                 />
@@ -202,6 +242,10 @@ const Bus = () => {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
+                  minLength={7}
+                  maxLength={15}
+                  pattern="^[0-9]{7,15}$"
+                  title="اكتب رقم جوال صالح مكون من 7 إلى 15 رقماً."
                   placeholder="مثال: 0912345678"
                   className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
                 />
@@ -214,6 +258,10 @@ const Bus = () => {
                   value={passport}
                   onChange={(e) => setPassport(e.target.value)}
                   required
+                  minLength={5}
+                  maxLength={20}
+                  pattern="^[A-Za-z0-9-]{5,20}$"
+                  title="رقم الجواز يجب أن يحتوي على أحرف أو أرقام أو شرطات فقط، وطوله بين 5 و20 حرفاً."
                   placeholder="اكتب رقم الجواز"
                   className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
                 />
