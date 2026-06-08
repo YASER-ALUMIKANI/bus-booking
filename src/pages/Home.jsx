@@ -8,16 +8,16 @@ const Home = () => {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const storedName = localStorage.getItem('clientName') || ''
-    const storedPhone = localStorage.getItem('clientPhone') || ''
+    const storedName = sessionStorage.getItem('clientName') || ''
+    const storedPhone = sessionStorage.getItem('clientPhone') || ''
     setName(storedName)
     setPhone(storedPhone)
   }, [])
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    localStorage.setItem('clientName', name)
-    localStorage.setItem('clientPhone', phone)
+    sessionStorage.setItem('clientName', name)
+    sessionStorage.setItem('clientPhone', phone)
     setStatus('saved')
     navigate('/bus')
   }

@@ -28,8 +28,8 @@ const Bus = () => {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const storedName = localStorage.getItem('clientName')
-    const storedPhone = localStorage.getItem('clientPhone')
+    const storedName = sessionStorage.getItem('clientName')
+    const storedPhone = sessionStorage.getItem('clientPhone')
     if (storedName) setPassengerName(storedName)
     if (storedPhone) setPhone(storedPhone)
   }, [])
