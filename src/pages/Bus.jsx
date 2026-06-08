@@ -23,6 +23,8 @@ const Bus = () => {
   const [passengerName, setPassengerName] = useState('')
   const [phone, setPhone] = useState('')
   const [passport, setPassport] = useState('')
+  const [passportImage, setPassportImage] = useState(null)
+  const [passportPreview, setPassportPreview] = useState('')
   const [travelDate, setTravelDate] = useState('')
   const [availableDates, setAvailableDates] = useState([])
   const [company, setCompany] = useState('البركة')
@@ -60,6 +62,17 @@ const Bus = () => {
     }
     loadToken()
   }, [])
+
+  const handlePassportImageChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      setPassportImage(null)
+      setPassportPreview('')
+      return
+    }
+    setPassportImage(file)
+    setPassportPreview(URL.createObjectURL(file))
+  }
 
   const openPrintWindow = (ticket) => {
     if (typeof window === 'undefined') return
@@ -166,33 +179,46 @@ const Bus = () => {
       setError('اختر تاريخ مغادرة صالحاً من التقويم.')
       return
     }
-    setStatus('sending')
-    setError('')
-
-    const payload = {
-      passengerName,
-      phone,
-      passport,
-      travelDate,
-      company,
-      origin,
-      destination,
+    if (!passportImage) {
+      setError('يرجى رفع صورة جواز السفر.')
+      return
     }
-
-    try {
-      if (!csrfToken) {
-      setError('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
-      setStatus('')
+    const allowedImageTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedImageTypes.includes(passportImage.type)) {
+      setError('يُسمح فقط بصور الجواز بصيغة JPG أو PNG أو WEBP.')
+      return
+    }
+    if (passportImage.size > 5 * 1024 * 1024) {
+      setError('حجم الصورة كبير جدًا. الرجاء اختيار صورة أقل من 5 ميجابايت.')
       return
     }
 
-    const response = await fetch('/api/bookings', {
+    setStatus('sending')
+    setError('')
+
+    const formData = new FormData()
+    formData.append('passengerName', passengerName.trim())
+    formData.append('phone', phone.trim())
+    formData.append('passport', passport.trim())
+    formData.append('travelDate', travelDate)
+    formData.append('company', company)
+    formData.append('origin', origin.trim())
+    formData.append('destination', destination.trim())
+    formData.append('passportImage', passportImage)
+
+    try {
+      if (!csrfToken) {
+        setError('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
+        setStatus('')
+        return
+      }
+
+      const response = await fetch('/api/bookings', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'X-CSRF-Token': csrfToken,
         },
-        body: JSON.stringify(payload),
+        body: formData,
       })
 
       if (!response.ok) {
@@ -214,6 +240,8 @@ const Bus = () => {
       setStatus('success')
       openPrintWindow(ticket)
       setPassport('')
+      setPassportImage(null)
+      setPassportPreview('')
       setTravelDate('')
       setOrigin('')
       setDestination('')
@@ -282,6 +310,31 @@ const Bus = () => {
                   placeholder="اكتب رقم الجواز"
                   className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">صورة جواز السفر</label>
+                <div className="space-y-3">
+                  <label htmlFor="passportImage" className="inline-flex items-center justify-center rounded-full bg-violet-600 px-4 py-3 text-white font-semibold shadow-sm hover:bg-violet-700 transition cursor-pointer">
+                    اختر صورة جواز السفر
+                  </label>
+                  <input
+                    id="passportImage"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handlePassportImageChange}
+                    className="sr-only"
+                  />
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">يمكنك رفع صورة من المعرض أو التقاطها مباشرة من الكاميرا.</p>
+                  {passportPreview && (
+                    <img
+                      src={passportPreview}
+                      alt="معاينة جواز السفر"
+                      className="mt-3 h-40 w-full max-w-xs rounded-2xl object-cover border border-neutral-200 dark:border-neutral-800"
+                    />
+                  )}
+                </div>
               </div>
 <div className="grid gap-5 md:grid-cols-[1fr_200px] items-start">
 

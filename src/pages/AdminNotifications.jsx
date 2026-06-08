@@ -23,6 +23,7 @@ const AdminNotifications = () => {
   const [requestReasons, setRequestReasons] = useState({})
   const [role, setRole] = useState('')
   const [csrfToken, setCsrfToken] = useState('')
+  const [zoomedPassportUrl, setZoomedPassportUrl] = useState('')
   const navigate = useNavigate()
 
   const getToken = () => localStorage.getItem('adminToken')
@@ -269,6 +270,22 @@ const AdminNotifications = () => {
                     <div>
                       <p className="text-sm text-neutral-500 dark:text-neutral-400">رقم الجواز</p>
                       <p className="mt-1">{booking.passport}</p>
+                      {booking.passport_image_url && (
+                        <div className="mt-3 space-y-3">
+                          <img
+                            src={booking.passport_image_url}
+                            alt="صورة جواز السفر"
+                            className="h-32 w-full max-w-[220px] rounded-2xl object-cover border border-neutral-200 dark:border-neutral-800"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setZoomedPassportUrl(booking.passport_image_url)}
+                            className="inline-flex items-center justify-center rounded-full border border-violet-600 bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition"
+                          >
+                            تكبير الصورة
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <p className="text-sm text-neutral-500 dark:text-neutral-400">من</p>
@@ -413,6 +430,24 @@ const AdminNotifications = () => {
           </div>
         )}
       </div>
+      {zoomedPassportUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="relative max-w-4xl w-full rounded-3xl bg-white p-4 shadow-2xl dark:bg-neutral-950">
+            <button
+              type="button"
+              onClick={() => setZoomedPassportUrl('')}
+              className="absolute right-4 top-4 inline-flex items-center justify-center rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800 transition"
+            >
+              إغلاق
+            </button>
+            <img
+              src={zoomedPassportUrl}
+              alt="صورة جواز السفر مكبرة"
+              className="max-h-[80vh] w-full rounded-3xl object-contain"
+            />
+          </div>
+        </div>
+      )}
     </main>
   )
 }

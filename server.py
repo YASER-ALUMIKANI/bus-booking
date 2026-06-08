@@ -7,6 +7,7 @@ import sqlite3
 import time
 from flask import Flask, send_from_directory, abort, request, jsonify, g, session
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_FILE = BASE_DIR / "app.db"
@@ -36,6 +37,9 @@ TOKENS = {}
 VALID_STATUSES = {"pending", "confirmed", "cancelled"}
 VALID_COMPANIES = {"البركة", "المتصدر", "البراق"}
 VALID_CITIES = {"البيضاء", "صنعاء", "عدن", "تعز", "الحديدة", "ذمار", "الرياض", "جدة", "الدمام", "أبها", "مكة"}
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+UPLOAD_DIR = BASE_DIR / "uploads" / "passports"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_db():
@@ -109,15 +113,20 @@ def init_db():
         db.execute("ALTER TABLE bookings ADD COLUMN cancellation_reason TEXT")
     if "requested_cancellation_reason" not in columns:
         db.execute("ALTER TABLE bookings ADD COLUMN requested_cancellation_reason TEXT")
+    if "passport_image" not in columns:
+        db.execute("ALTER TABLE bookings ADD COLUMN passport_image TEXT")
     db.commit()
 
 
 def row_to_booking(row):
+    passport_image = row["passport_image"] if "passport_image" in row.keys() else None
     return {
         "id": row["id"],
         "passenger_name": row["passenger_name"],
         "phone": row["phone"],
         "passport": row["passport"],
+        "passport_image": passport_image,
+        "passport_image_url": f"/uploads/passports/{passport_image}" if passport_image else None,
         "travel_date": row["travel_date"],
         "origin": row["origin"],
         "destination": row["destination"],
@@ -182,6 +191,13 @@ def get_or_create_csrf_token() -> str:
         csrf_token = secrets.token_hex(32)
         session["csrf_token"] = csrf_token
     return csrf_token
+
+
+def allowed_image_filename(filename: str) -> bool:
+    if not isinstance(filename, str) or "." not in filename:
+        return False
+    extension = filename.rsplit(".", 1)[1].lower()
+    return extension in ALLOWED_IMAGE_EXTENSIONS
 
 
 @app.route("/api/csrf-token", methods=["GET"])
@@ -253,18 +269,30 @@ def create_booking():
     if not require_csrf_token():
         return jsonify({"message": "CSRF token missing or invalid."}), 403
 
-    if not request.is_json:
+    passport_image_file = None
+    if request.content_type and request.content_type.startswith("multipart/form-data"):
+        form = request.form
+        passport_image_file = request.files.get("passportImage")
+        passenger_name = form.get("passengerName")
+        phone = form.get("phone")
+        passport = form.get("passport")
+        travel_date = form.get("travelDate")
+        origin = form.get("origin")
+        destination = form.get("destination")
+        company = form.get("company")
+        guest = form.get("guest", False)
+    elif request.is_json:
+        data = request.get_json()
+        passenger_name = data.get("passengerName")
+        phone = data.get("phone")
+        passport = data.get("passport")
+        travel_date = data.get("travelDate")
+        origin = data.get("origin")
+        destination = data.get("destination")
+        company = data.get("company")
+        guest = data.get("guest", False)
+    else:
         return jsonify({"message": "Invalid request payload."}), 400
-
-    data = request.get_json()
-    passenger_name = data.get("passengerName")
-    phone = data.get("phone")
-    passport = data.get("passport")
-    travel_date = data.get("travelDate")
-    origin = data.get("origin")
-    destination = data.get("destination")
-    company = data.get("company")
-    guest = data.get("guest", False)
 
     if not all([passenger_name, phone, passport, travel_date, origin, destination, company]):
         return jsonify({"message": "جميع الحقول مطلوبة."}), 400
@@ -291,19 +319,30 @@ def create_booking():
     if not validate_travel_date(travel_date):
         return jsonify({"message": "تاريخ المغادرة غير صالح. استخدم الصيغة yyyy-mm-dd."}), 400
 
+    if not passport_image_file:
+        return jsonify({"message": "يرجى رفع صورة جواز السفر."}), 400
+    if not allowed_image_filename(passport_image_file.filename):
+        return jsonify({"message": "صيغة صورة الجواز غير مدعومة. استخدم JPG أو PNG أو WEBP."}), 400
+
     if not travel_date_available(travel_date):
         return jsonify({"message": "تاريخ المغادرة غير متاح. اختر تاريخاً من التقويم المصرح به."}), 400
 
     booking_id = secrets.token_hex(8)
+    filename = secure_filename(passport_image_file.filename)
+    extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else 'jpg'
+    passport_image_filename = f"{booking_id}.{extension}"
+    passport_image_path = UPLOAD_DIR / passport_image_filename
+    passport_image_file.save(passport_image_path)
     db = get_db()
     db.execute(
-        "INSERT INTO bookings (id, passenger_name, phone, passport, travel_date, origin, destination, status, requested_status, cancellation_reason, requested_cancellation_reason, locked, change_requested, approval_granted, guest, timestamp)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO bookings (id, passenger_name, phone, passport, passport_image, travel_date, origin, destination, status, requested_status, cancellation_reason, requested_cancellation_reason, locked, change_requested, approval_granted, guest, timestamp)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             booking_id,
             passenger_name,
             phone,
             passport,
+            passport_image_filename,
             travel_date,
             origin,
             destination,
@@ -422,6 +461,10 @@ def get_schedules():
     rows = db.execute("SELECT id, travel_date FROM schedules ORDER BY travel_date ASC").fetchall()
     dates = [{"id": r["id"], "travelDate": r["travel_date"]} for r in rows]
     return jsonify({"dates": dates}), 200
+
+@app.route('/uploads/passports/<path:filename>')
+def serve_passport_image(filename: str):
+    return send_from_directory(UPLOAD_DIR, filename)
 
 @app.route("/api/schedules", methods=["POST"])
 def create_schedule():
