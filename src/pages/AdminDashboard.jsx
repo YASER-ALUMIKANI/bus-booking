@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { getCsrfToken } from '../utils/csrf'
 
 const AdminDashboard = () => {
   const [bookings, setBookings] = useState([])
@@ -12,6 +13,7 @@ const AdminDashboard = () => {
   const [userMessage, setUserMessage] = useState('')
   const [userError, setUserError] = useState('')
   const [creatingUser, setCreatingUser] = useState(false)
+  const [csrfToken, setCsrfToken] = useState('')
   const navigate = useNavigate()
 
   const getToken = () => localStorage.getItem('adminToken')
@@ -84,11 +86,14 @@ const AdminDashboard = () => {
     }
 
     try {
+      if (!csrfToken) {
+        throw new Error('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
+      }
       const response = await fetch('/api/admin/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': '1',
+          'X-CSRF-Token': csrfToken,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(newUser),
@@ -112,6 +117,14 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchBookings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const loadToken = async () => {
+      const token = await getCsrfToken()
+      setCsrfToken(token)
+    }
+    loadToken()
   }, [])
 
   const handleLogout = () => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import DatePicker from '../components/DatePicker/DatePicker'
+import { getCsrfToken } from '../utils/csrf'
 
 const cityOptions = [
   'البيضاء',
@@ -29,6 +30,7 @@ const Bus = () => {
   const [destination, setDestination] = useState('')
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  const [csrfToken, setCsrfToken] = useState('')
 
   useEffect(() => {
     const storedName = sessionStorage.getItem('clientName')
@@ -49,6 +51,14 @@ const Bus = () => {
       }
     }
     fetchSchedules()
+  }, [])
+
+  useEffect(() => {
+    const loadToken = async () => {
+      const token = await getCsrfToken()
+      setCsrfToken(token)
+    }
+    loadToken()
   }, [])
 
   const openPrintWindow = (ticket) => {
@@ -170,11 +180,17 @@ const Bus = () => {
     }
 
     try {
-      const response = await fetch('/api/bookings', {
+      if (!csrfToken) {
+      setError('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
+      setStatus('')
+      return
+    }
+
+    const response = await fetch('/api/bookings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': '1',
+          'X-CSRF-Token': csrfToken,
         },
         body: JSON.stringify(payload),
       })
@@ -184,8 +200,9 @@ const Bus = () => {
         throw new Error(data.message || 'فشل إرسال الطلب. حاول مرة أخرى.')
       }
 
+      const data = await response.json()
       const ticket = {
-        ticketNumber: `T-${crypto.randomUUID().slice(0,8)}`,
+        ticketNumber: data.ticketNumber || `T-${crypto.randomUUID().slice(0,8)}`,
         passengerName,
         phone,
         passport,

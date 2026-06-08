@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getCsrfToken } from '../utils/csrf'
 
 const AdminSchedules = () => {
   const [dates, setDates] = useState([])
@@ -7,6 +8,7 @@ const AdminSchedules = () => {
   const [error, setError] = useState('')
   const [newDate, setNewDate] = useState('')
   const [saving, setSaving] = useState(false)
+  const [csrfToken, setCsrfToken] = useState('')
   const navigate = useNavigate()
 
   const getToken = () => localStorage.getItem('adminToken')
@@ -29,6 +31,14 @@ const AdminSchedules = () => {
     fetchSchedules()
   }, [])
 
+  useEffect(() => {
+    const loadToken = async () => {
+      const token = await getCsrfToken()
+      setCsrfToken(token)
+    }
+    loadToken()
+  }, [])
+
   const handleAdd = async (e) => {
     e.preventDefault()
     setError('')
@@ -43,11 +53,14 @@ const AdminSchedules = () => {
         navigate('/admin/login')
         return
       }
+      if (!csrfToken) {
+        throw new Error('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
+      }
       const res = await fetch('/api/schedules', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': '1',
+          'X-CSRF-Token': csrfToken,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ travelDate: newDate }),
@@ -68,10 +81,13 @@ const AdminSchedules = () => {
     try {
       const token = getToken()
       if (!token) { navigate('/admin/login'); return }
+      if (!csrfToken) {
+        throw new Error('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
+      }
       const res = await fetch(`/api/schedules/${id}`, {
         method: 'DELETE',
         headers: {
-          'X-CSRF-Token': '1',
+          'X-CSRF-Token': csrfToken,
           Authorization: `Bearer ${token}`,
         },
       })

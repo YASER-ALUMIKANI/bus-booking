@@ -4,7 +4,7 @@ from pathlib import Path
 import secrets
 import sqlite3
 import time
-from flask import Flask, send_from_directory, abort, request, jsonify, g
+from flask import Flask, send_from_directory, abort, request, jsonify, g, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -12,6 +12,9 @@ DB_FILE = BASE_DIR / "app.db"
 DIST_DIR = BASE_DIR / "dist"
 
 app = Flask(__name__, static_folder=str(DIST_DIR / "assets"), static_url_path="/assets")
+app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 BOOKING_RATE_LIMIT = 15
 BOOKING_RATE_WINDOW_SECONDS = 60
@@ -163,10 +166,20 @@ def require_token():
 
 def require_csrf_token():
     csrf_token = request.headers.get("X-CSRF-Token")
-    x_requested_with = request.headers.get("X-Requested-With")
-    if csrf_token == "1" or x_requested_with == "XMLHttpRequest":
-        return True
-    return False
+    return csrf_token and csrf_token == session.get("csrf_token")
+
+
+def get_or_create_csrf_token() -> str:
+    csrf_token = session.get("csrf_token")
+    if not csrf_token:
+        csrf_token = secrets.token_hex(32)
+        session["csrf_token"] = csrf_token
+    return csrf_token
+
+
+@app.route("/api/csrf-token", methods=["GET"])
+def get_csrf_token():
+    return jsonify({"csrfToken": get_or_create_csrf_token()}), 200
 
 
 def validate_passenger_name(name: str) -> bool:
@@ -308,10 +321,13 @@ def create_booking():
     print(f"  Travel date: {travel_date}")
     print(f"  From: {origin}")
     print(f"  To: {destination}")
+    ticket_number = f"T-{booking_id}"
+
     print("  Status: pending")
     print(f"  Guest user: {guest}")
+    print(f"  Ticket number: {ticket_number}")
 
-    return jsonify({"message": "Booking request received."}), 201
+    return jsonify({"message": "Booking request received.", "ticketNumber": ticket_number}), 201
 
 
 @app.route("/api/admin/login", methods=["POST"])

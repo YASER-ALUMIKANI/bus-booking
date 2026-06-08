@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { getCsrfToken } from '../utils/csrf'
 
 const statusLabels = {
   pending: 'معلق',
@@ -21,6 +22,7 @@ const AdminNotifications = () => {
   const [cancelReasons, setCancelReasons] = useState({})
   const [requestReasons, setRequestReasons] = useState({})
   const [role, setRole] = useState('')
+  const [csrfToken, setCsrfToken] = useState('')
   const navigate = useNavigate()
 
   const getToken = () => localStorage.getItem('adminToken')
@@ -62,6 +64,14 @@ const AdminNotifications = () => {
     fetchBookings()
   }, [])
 
+  useEffect(() => {
+    const loadToken = async () => {
+      const token = await getCsrfToken()
+      setCsrfToken(token)
+    }
+    loadToken()
+  }, [])
+
   const handleLogout = () => {
     localStorage.removeItem('adminToken')
     localStorage.removeItem('adminRole')
@@ -84,11 +94,14 @@ const AdminNotifications = () => {
     }
 
     try {
+      if (!csrfToken) {
+        throw new Error('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
+      }
       const response = await fetch(`/api/bookings/${bookingId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': '1',
+          'X-CSRF-Token': csrfToken,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status: newStatus, cancellationReason: reason.trim() }),
@@ -117,11 +130,14 @@ const AdminNotifications = () => {
     }
 
     try {
+      if (!csrfToken) {
+        throw new Error('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
+      }
       const response = await fetch(`/api/bookings/${bookingId}/request-change`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': '1',
+          'X-CSRF-Token': csrfToken,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ requested_status: requestedStatus, requested_cancellation_reason: reason.trim() }),
@@ -151,11 +167,14 @@ const AdminNotifications = () => {
     }
 
     try {
+      if (!csrfToken) {
+        throw new Error('فشل الحصول على رمز CSRF. حاول إعادة تحميل الصفحة.')
+      }
       const response = await fetch(`/api/bookings/${bookingId}/approve-change`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': '1',
+          'X-CSRF-Token': csrfToken,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ password }),
