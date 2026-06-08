@@ -79,6 +79,14 @@ def init_db():
         )
         """
     )
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            travel_date TEXT UNIQUE NOT NULL
+        )
+        """
+    )
     columns = [row[1] for row in db.execute("PRAGMA table_info(bookings)").fetchall()]
     if "cancellation_reason" not in columns:
         db.execute("ALTER TABLE bookings ADD COLUMN cancellation_reason TEXT")
@@ -263,6 +271,54 @@ def get_bookings():
     rows = db.execute("SELECT * FROM bookings ORDER BY timestamp DESC").fetchall()
     bookings = [row_to_booking(row) for row in rows]
     return jsonify({"bookings": bookings}), 200
+
+@app.route("/api/schedules", methods=["GET"])
+def get_schedules():
+    db = get_db()
+    rows = db.execute("SELECT id, travel_date FROM schedules ORDER BY travel_date ASC").fetchall()
+    dates = [{"id": r["id"], "travelDate": r["travel_date"]} for r in rows]
+    return jsonify({"dates": dates}), 200
+
+@app.route("/api/schedules", methods=["POST"])
+def create_schedule():
+    # Require manager token
+    current_user = require_token()
+    if not current_user:
+        return jsonify({"message": "Unauthorized."}), 401
+    if current_user.get("role") != "manager":
+        return jsonify({"message": "يجب أن يكون المدير لإضافة جدول الرحلات."}), 403
+
+    if not request.is_json:
+        return jsonify({"message": "Invalid request payload."}), 400
+    data = request.get_json()
+    travel_date = data.get("travelDate")
+    if not travel_date:
+        return jsonify({"message": "travelDate is required."}), 400
+    db = get_db()
+    try:
+        cur = db.execute("INSERT OR IGNORE INTO schedules (travel_date) VALUES (?)", (travel_date,))
+        db.commit()
+        # fetch inserted id
+        row = db.execute("SELECT id, travel_date FROM schedules WHERE travel_date = ?", (travel_date,)).fetchone()
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+    return jsonify({"message": "Schedule added.", "schedule": {"id": row["id"], "travelDate": row["travel_date"]}}), 201
+
+
+@app.route("/api/schedules/<int:schedule_id>", methods=["DELETE"])
+def delete_schedule(schedule_id: int):
+    current_user = require_token()
+    if not current_user:
+        return jsonify({"message": "Unauthorized."}), 401
+    if current_user.get("role") != "manager":
+        return jsonify({"message": "يجب أن يكون المدير لحذف جدول الرحلات."}), 403
+    db = get_db()
+    row = db.execute("SELECT id FROM schedules WHERE id = ?", (schedule_id,)).fetchone()
+    if not row:
+        return jsonify({"message": "Schedule not found."}), 404
+    db.execute("DELETE FROM schedules WHERE id = ?", (schedule_id,))
+    db.commit()
+    return jsonify({"message": "Schedule deleted."}), 200
 
 
 @app.route("/api/bookings/<booking_id>", methods=["PATCH"])

@@ -161,6 +161,11 @@ const AdminDashboard = () => {
                 {showDatabase ? 'إخفاء محتوى القاعدة' : 'عرض محتوى قاعدة البيانات'}
               </button>
             )}
+            {role === 'manager' && (
+              <Link to="/admin/schedules" className="inline-flex items-center justify-center rounded-full border border-violet-600 bg-white px-6 py-3 text-violet-600 font-semibold hover:bg-violet-50 transition">
+                إدارة الجداول
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="rounded-full bg-red-600 px-6 py-3 text-white font-semibold hover:bg-red-700 transition"

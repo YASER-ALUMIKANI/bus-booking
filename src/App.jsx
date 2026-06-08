@@ -8,6 +8,7 @@ import Services from './pages/Services';
 import AdminLogin from './pages/AdminLogin';
 import AdminNotifications from './pages/AdminNotifications';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminSchedules from './pages/AdminSchedules';
 
 function App() {
 
@@ -25,6 +26,7 @@ function App() {
             <Route path='/admin/login' element={<AdminLogin />} />
             <Route path='/admin' element={<AdminNotifications />} />
             <Route path='/admin/dashboard' element={<AdminDashboard />} />
+            <Route path='/admin/schedules' element={<AdminSchedules />} />
             <Route path='*' element={<Home />} />
           </Routes>
         </div>

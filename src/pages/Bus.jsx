@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import DatePicker from '../components/DatePicker/DatePicker'
 
 const cityOptions = [
  'البيضاء ',
@@ -19,6 +20,7 @@ const Bus = () => {
   const [phone, setPhone] = useState('')
   const [passport, setPassport] = useState('')
   const [travelDate, setTravelDate] = useState('')
+  const [availableDates, setAvailableDates] = useState([])
   const [company, setCompany] = useState('البركة')
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
@@ -30,6 +32,20 @@ const Bus = () => {
     const storedPhone = localStorage.getItem('clientPhone')
     if (storedName) setPassengerName(storedName)
     if (storedPhone) setPhone(storedPhone)
+  }, [])
+
+  useEffect(() => {
+    const fetchSchedules = async () => {
+      try {
+        const res = await fetch('/api/schedules')
+        if (!res.ok) return
+        const data = await res.json()
+        setAvailableDates(data.dates || [])
+      } catch (e) {
+        // ignore
+      }
+    }
+    fetchSchedules()
   }, [])
 
   const openPrintWindow = (ticket) => {
@@ -149,6 +165,7 @@ const Bus = () => {
           <section className="space-y-6 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-8 shadow-sm">
             <h2 className="text-2xl font-semibold">نموذج الحجز</h2>
             <form onSubmit={handleSubmit} className="space-y-5">
+
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">اسم المسافر</label>
                 <input
@@ -186,73 +203,79 @@ const Bus = () => {
               </div>
 <div className="grid gap-5 md:grid-cols-[1fr_200px] items-start">
 
-  <div>
-    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-      تاريخ المغادرة
-    </label>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">تاريخ المغادرة</label>
+                  {availableDates.length === 0 ? (
+                    <div className="text-sm text-neutral-500">لا توجد رحلات مُجدولة حالياً.</div>
+                  ) : (
+                    <>
+                      <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 p-3">
+                        <DatePicker availableDates={availableDates} value={travelDate} onChange={setTravelDate} />
+                      </div>
+                      {travelDate ? (
+                        <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">
+                          التاريخ المحدد: <span className="font-semibold">{new Date(travelDate).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                        </p>
+                      ) : (
+                        <p className="mt-3 text-sm text-neutral-500">انقر على أي تاريخ مفعّل لتحديده.</p>
+                      )}
+                    </>
+                  )}
+                </div>
 
-    <input
-      type="date"
-      value={travelDate}
-      onChange={(e) => setTravelDate(e.target.value)}
-      required
-      className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
-    />
-  </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    شركة النقل
+                  </label>
 
-  <div>
-    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-      شركة النقل
-    </label>
+                  <div className="flex flex-col space-y-2 bg-white dark:bg-neutral-950 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
 
-    <div className="flex flex-col space-y-2 bg-white dark:bg-neutral-950 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
+                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+                      <input
+                        type="radio"
+                        name="company"
+                        value="البركة"
+                        checked={company === 'البركة'}
+                        onChange={() => setCompany('البركة')}
+                        className="form-radio text-violet-600"
+                      />
+                      <span className="text-neutral-700 dark:text-neutral-300">
+                        البركة
+                      </span>
+                    </label>
 
-      <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
-        <input
-          type="radio"
-          name="company"
-          value="البركة"
-          checked={company === 'البركة'}
-          onChange={() => setCompany('البركة')}
-          className="form-radio text-violet-600"
-        />
-        <span className="text-neutral-700 dark:text-neutral-300">
-          البركة
-        </span>
-      </label>
+                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+                      <input
+                        type="radio"
+                        name="company"
+                        value="المتصدر"
+                        checked={company === 'المتصدر'}
+                        onChange={() => setCompany('المتصدر')}
+                        className="form-radio text-violet-600"
+                      />
+                      <span className="text-neutral-700 dark:text-neutral-300">
+                        المتصدر
+                      </span>
+                    </label>
 
-      <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
-        <input
-          type="radio"
-          name="company"
-          value="المتصدر"
-          checked={company === 'المتصدر'}
-          onChange={() => setCompany('المتصدر')}
-          className="form-radio text-violet-600"
-        />
-        <span className="text-neutral-700 dark:text-neutral-300">
-          المتصدر
-        </span>
-      </label>
+                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+                      <input
+                        type="radio"
+                        name="company"
+                        value="البراق"
+                        checked={company === 'البراق'}
+                        onChange={() => setCompany('البراق')}
+                        className="form-radio text-violet-600"
+                      />
+                      <span className="text-neutral-700 dark:text-neutral-300">
+                        البراق
+                      </span>
+                    </label>
 
-      <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
-        <input
-          type="radio"
-          name="company"
-          value="البراق"
-          checked={company === 'البراق'}
-          onChange={() => setCompany('البراق')}
-          className="form-radio text-violet-600"
-        />
-        <span className="text-neutral-700 dark:text-neutral-300">
-          البراق
-        </span>
-      </label>
+                  </div>
+                </div>
 
-    </div>
-  </div>
-
-</div>
+              </div>
           
 
               <div className="grid gap-5 md:grid-cols-2">
