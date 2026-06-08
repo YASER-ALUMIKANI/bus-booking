@@ -22,7 +22,6 @@ const Bus = () => {
   const [company, setCompany] = useState('البركة')
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
-  const [ticketData, setTicketData] = useState(null)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
 
@@ -117,7 +116,7 @@ const Bus = () => {
       }
 
       const ticket = {
-        ticketNumber: `T-${Date.now().toString().slice(-6)}`,
+        ticketNumber: `T-${crypto.randomUUID().slice(0,8)}`,
         passengerName,
         phone,
         passport,
@@ -127,7 +126,6 @@ const Bus = () => {
         destination,
       }
       setStatus('success')
-      setTicketData(ticket)
       openPrintWindow(ticket)
       setPassport('')
       setTravelDate('')
@@ -293,45 +291,6 @@ const Bus = () => {
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               )}
 
-              {ticketData && (
-                <>
-                  <style>{`@media print { body * { visibility: hidden; } .print-area, .print-area * { visibility: visible; } .print-area { position: absolute; top: 0; left: 0; width: 100%; background: white; } .no-print { display: none !important; } }`}</style>
-                  <div className="print-area rounded-3xl border border-violet-200 dark:border-neutral-800 bg-violet-50 dark:bg-neutral-950 p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-xl font-semibold">تذكرة مبدئية</h3>
-                        <p className="text-sm text-neutral-600 dark:text-neutral-400">احفظ أو اطبع هذه التذكرة بعد تأكيد الحجز.</p>
-                      </div>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">رقم التذكرة</p>
-                        <p className="text-lg font-semibold">{ticketData.ticketNumber}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">شركة النقل</p>
-                        <p className="text-lg font-semibold">{ticketData.company}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">اسم المسافر</p>
-                        <p className="text-lg font-semibold">{ticketData.passengerName}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">رقم الجوال</p>
-                        <p className="text-lg font-semibold">{ticketData.phone}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">تاريخ المغادرة</p>
-                        <p className="text-lg font-semibold">{ticketData.travelDate}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4 sm:col-span-2">
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">الرحلة</p>
-                        <p className="text-lg font-semibold">من {ticketData.origin} إلى {ticketData.destination}</p>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
 
               <button
                 type="submit"
