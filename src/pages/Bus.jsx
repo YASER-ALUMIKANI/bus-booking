@@ -19,7 +19,6 @@ const Bus = () => {
   const [phone, setPhone] = useState('')
   const [passport, setPassport] = useState('')
   const [travelDate, setTravelDate] = useState('')
-  const [bookingDate, setBookingDate] = useState('')
   const [company, setCompany] = useState('البركة')
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
@@ -47,12 +46,10 @@ const Bus = () => {
       passengerName,
       phone,
       passport,
-      bookingDate,
       travelDate,
       company,
       origin,
       destination,
-      guest: true,
     }
 
     try {
@@ -75,14 +72,12 @@ const Bus = () => {
         passengerName,
         phone,
         passport,
-        bookingDate,
         travelDate,
         company,
         origin,
         destination,
       })
       setPassport('')
-      setBookingDate('')
       setTravelDate('')
       setOrigin('')
       setDestination('')
@@ -97,7 +92,7 @@ const Bus = () => {
       <div className="max-w-6xl mx-auto px-4 md:px-16 lg:px-28 py-16">
         <h1 className="text-4xl font-bold mb-4">حجز تذكرة حافلة</h1>
         <p className="text-lg leading-8 text-neutral-600 dark:text-neutral-300 mb-8">
-          الرجاء تعبئة النموذج التالي كمستخدم ضيف. سيتم استخدام بيانات العميل المحفوظة من صفحة الدخول تلقائياً.
+          الرجاء تعبئة النموذج التالي لحجز تذكرة الحافلة. سيتم حفظ التاريخ تلقائياً عند تأكيد الحجز.
         </p>
 
         <div className="grid gap-8 lg:grid-cols-[1.5fr_1fr]">
@@ -139,49 +134,76 @@ const Bus = () => {
                   className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
                 />
               </div>
+<div className="grid gap-5 md:grid-cols-[1fr_200px] items-start">
 
-              <div className="grid gap-5 md:grid-cols-[1fr_200px] items-start">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">تاريخ الحجز</label>
-                    <input
-                      type="date"
-                      value={bookingDate}
-                      onChange={(e) => setBookingDate(e.target.value)}
-                      required
-                      className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">تاريخ المغادرة</label>
-                    <input
-                      type="date"
-                      value={travelDate}
-                      onChange={(e) => setTravelDate(e.target.value)}
-                      required
-                      className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
-                    />
-                  </div>
-                </div>
+  <div>
+    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+      تاريخ المغادرة
+    </label>
 
-                <div>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">شركة النقل</label>
-                  <div className="flex flex-col space-y-2 bg-white dark:bg-neutral-950 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
-                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
-                      <input type="radio" name="company" value="البركة" checked={company==='البركة'} onChange={() => setCompany('البركة')} className="form-radio text-violet-600" />
-                      <span className="text-neutral-700 dark:text-neutral-300">البركة</span>
-                    </label>
-                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
-                      <input type="radio" name="company" value="المتصدر" checked={company==='المتصدر'} onChange={() => setCompany('المتصدر')} className="form-radio text-violet-600" />
-                      <span className="text-neutral-700 dark:text-neutral-300">المتصدر</span>
-                    </label>
-                    <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
-                      <input type="radio" name="company" value="البراق" checked={company==='البراق'} onChange={() => setCompany('البراق')} className="form-radio text-violet-600" />
-                      <span className="text-neutral-700 dark:text-neutral-300">البراق</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
+    <input
+      type="date"
+      value={travelDate}
+      onChange={(e) => setTravelDate(e.target.value)}
+      required
+      className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
+    />
+  </div>
+
+  <div>
+    <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+      شركة النقل
+    </label>
+
+    <div className="flex flex-col space-y-2 bg-white dark:bg-neutral-950 rounded-xl border border-neutral-200 dark:border-neutral-800 p-3">
+
+      <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+        <input
+          type="radio"
+          name="company"
+          value="البركة"
+          checked={company === 'البركة'}
+          onChange={() => setCompany('البركة')}
+          className="form-radio text-violet-600"
+        />
+        <span className="text-neutral-700 dark:text-neutral-300">
+          البركة
+        </span>
+      </label>
+
+      <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+        <input
+          type="radio"
+          name="company"
+          value="المتصدر"
+          checked={company === 'المتصدر'}
+          onChange={() => setCompany('المتصدر')}
+          className="form-radio text-violet-600"
+        />
+        <span className="text-neutral-700 dark:text-neutral-300">
+          المتصدر
+        </span>
+      </label>
+
+      <label className="inline-flex items-center space-x-3 rtl:space-x-reverse">
+        <input
+          type="radio"
+          name="company"
+          value="البراق"
+          checked={company === 'البراق'}
+          onChange={() => setCompany('البراق')}
+          className="form-radio text-violet-600"
+        />
+        <span className="text-neutral-700 dark:text-neutral-300">
+          البراق
+        </span>
+      </label>
+
+    </div>
+  </div>
+
+</div>
+          
 
               <div className="grid gap-5 md:grid-cols-2">
                 <div>
@@ -254,10 +276,6 @@ const Bus = () => {
                         <p className="text-lg font-semibold">{ticketData.phone}</p>
                       </div>
                       <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">تاريخ الحجز</p>
-                        <p className="text-lg font-semibold">{ticketData.bookingDate}</p>
-                      </div>
-                      <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-4">
                         <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">تاريخ المغادرة</p>
                         <p className="text-lg font-semibold">{ticketData.travelDate}</p>
                       </div>
@@ -281,10 +299,6 @@ const Bus = () => {
           </section>
 
           <aside className="space-y-4 bg-violet-50 dark:bg-neutral-900/80 border border-violet-200 dark:border-neutral-800 rounded-3xl p-8">
-            <h2 className="text-2xl font-semibold">معلومات الضيف</h2>
-            <p className="text-neutral-600 dark:text-neutral-300 leading-7">
-              بيانات العميل ستظهر تلقائياً هنا بعد تسجيل الدخول من الصفحة الرئيسية. إذا لم يتم إدخالها بعد، يمكنك تعبئتها يدوياً.
-            </p>
             <div className="rounded-2xl bg-white dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 p-5">
               <h3 className="text-lg font-semibold mb-3">مدن متاحة</h3>
               <ul className="space-y-2 text-neutral-600 dark:text-neutral-400 list-disc list-inside">
