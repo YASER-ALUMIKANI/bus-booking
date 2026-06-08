@@ -12,6 +12,10 @@ DIST_DIR = BASE_DIR / "dist"
 
 app = Flask(__name__, static_folder=str(DIST_DIR / "assets"), static_url_path="/assets")
 
+BOOKING_RATE_LIMIT = 15
+BOOKING_RATE_WINDOW_SECONDS = 60
+booking_request_log = {}
+
 DEFAULT_ADMIN_USERS = {
     "manager": {"password": "admin123", "role": "manager"},
     "employee": {"password": "employee123", "role": "employee"},
@@ -121,6 +125,26 @@ def get_admin_user(username):
     return db.execute("SELECT * FROM admin_users WHERE username = ?", (username,)).fetchone()
 
 
+def get_client_ip():
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr or "unknown"
+
+
+def is_rate_limited(ip):
+    now = int(time.time())
+    window_start = now - BOOKING_RATE_WINDOW_SECONDS
+    request_times = booking_request_log.get(ip, [])
+    request_times = [t for t in request_times if t >= window_start]
+    if len(request_times) >= BOOKING_RATE_LIMIT:
+        booking_request_log[ip] = request_times
+        return True
+    request_times.append(now)
+    booking_request_log[ip] = request_times
+    return False
+
+
 def get_current_user():
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -140,6 +164,10 @@ with app.app_context():
 
 @app.route("/api/bookings", methods=["POST"])
 def create_booking():
+    client_ip = get_client_ip()
+    if is_rate_limited(client_ip):
+        return jsonify({"message": "تم تجاوز الحد المسموح لعدد الطلبات. حاول مرة أخرى بعد قليل."}), 429
+
     if not request.is_json:
         return jsonify({"message": "Invalid request payload."}), 400
 
@@ -154,6 +182,9 @@ def create_booking():
 
     if not all([passenger_name, phone, passport, travel_date, origin, destination]):
         return jsonify({"message": "جميع الحقول مطلوبة."}), 400
+
+    if origin == destination:
+        return jsonify({"message": "يجب أن تكون الوجهة مختلفة عن نقطة الانطلاق."}), 400
 
     booking_id = secrets.token_hex(8)
     db = get_db()

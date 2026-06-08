@@ -53,6 +53,22 @@ const Bus = () => {
     const printWindow = window.open('', '_blank', 'width=900,height=700')
     if (!printWindow) return
 
+    const escapeHtml = (str) =>
+      String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+
+    const safeTicketNumber = escapeHtml(ticket.ticketNumber)
+    const safeCompany = escapeHtml(ticket.company)
+    const safePassengerName = escapeHtml(ticket.passengerName)
+    const safePhone = escapeHtml(ticket.phone)
+    const safeTravelDate = escapeHtml(ticket.travelDate)
+    const safeOrigin = escapeHtml(ticket.origin)
+    const safeDestination = escapeHtml(ticket.destination)
+
     const html = `
       <html lang="ar">
       <head>
@@ -77,12 +93,12 @@ const Bus = () => {
           <div class="card">
             <div class="title">تذكرة مبدئية</div>
             <div class="grid">
-              <div class="item"><span class="label">رقم التذكرة</span><span class="value">${ticket.ticketNumber}</span></div>
-              <div class="item"><span class="label">شركة النقل</span><span class="value">${ticket.company}</span></div>
-              <div class="item"><span class="label">اسم المسافر</span><span class="value">${ticket.passengerName}</span></div>
-              <div class="item"><span class="label">رقم الجوال</span><span class="value">${ticket.phone}</span></div>
-              <div class="item"><span class="label">تاريخ المغادرة</span><span class="value">${ticket.travelDate}</span></div>
-              <div class="item" style="grid-column: span 2;"><span class="label">الرحلة</span><span class="value">من ${ticket.origin} إلى ${ticket.destination}</span></div>
+              <div class="item"><span class="label">رقم التذكرة</span><span class="value">${safeTicketNumber}</span></div>
+              <div class="item"><span class="label">شركة النقل</span><span class="value">${safeCompany}</span></div>
+              <div class="item"><span class="label">اسم المسافر</span><span class="value">${safePassengerName}</span></div>
+              <div class="item"><span class="label">رقم الجوال</span><span class="value">${safePhone}</span></div>
+              <div class="item"><span class="label">تاريخ المغادرة</span><span class="value">${safeTravelDate}</span></div>
+              <div class="item" style="grid-column: span 2;"><span class="label">الرحلة</span><span class="value">من ${safeOrigin} إلى ${safeDestination}</span></div>
             </div>
             <div class="footer">
               <button class="print-button" onclick="window.print()">طباعة هذه الصفحة</button>
