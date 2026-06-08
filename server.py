@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from pathlib import Path
@@ -15,6 +16,12 @@ app = Flask(__name__, static_folder=str(DIST_DIR / "assets"), static_url_path="/
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 BOOKING_RATE_LIMIT = 15
 BOOKING_RATE_WINDOW_SECONDS = 60
@@ -313,19 +320,19 @@ def create_booking():
     )
     db.commit()
 
-    print("[ADMIN NOTIFICATION] New guest booking request received:")
-    print(f"  ID: {booking_id}")
-    print(f"  Passenger: {passenger_name}")
-    print(f"  Phone: {phone}")
-    print(f"  Passport: {passport}")
-    print(f"  Travel date: {travel_date}")
-    print(f"  From: {origin}")
-    print(f"  To: {destination}")
+    logger.info("[ADMIN NOTIFICATION] New guest booking request received:")
+    logger.info("  ID: %s", booking_id)
+    logger.info("  Passenger: %s", passenger_name)
+    logger.info("  Phone: %s", phone)
+    logger.info("  Passport: %s", passport)
+    logger.info("  Travel date: %s", travel_date)
+    logger.info("  From: %s", origin)
+    logger.info("  To: %s", destination)
     ticket_number = f"T-{booking_id}"
 
-    print("  Status: pending")
-    print(f"  Guest user: {guest}")
-    print(f"  Ticket number: {ticket_number}")
+    logger.info("  Status: pending")
+    logger.info("  Guest user: %s", guest)
+    logger.info("  Ticket number: %s", ticket_number)
 
     return jsonify({"message": "Booking request received.", "ticketNumber": ticket_number}), 201
 
@@ -500,7 +507,7 @@ def update_booking_status(booking_id: str):
 
     row = db.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
     booking = row_to_booking(row)
-    print(f"[ADMIN UPDATE] Booking {booking_id} status changed to {status}.")
+    logger.info("[ADMIN UPDATE] Booking %s status changed to %s.", booking_id, status)
     return jsonify({"booking": booking}), 200
 
 
