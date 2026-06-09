@@ -1,84 +1,254 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { FaEye, FaEyeSlash, FaGlobe, FaChevronDown } from 'react-icons/fa6'
+import Logo from '../assets/logo.png'
+import { getCsrfToken } from '../utils/csrf'
+
+const API_MESSAGES = {
+  loginFailed: 'رقم الجوال أو كلمة المرور غير صحيحة.',
+  signupFailed: 'تعذر إنشاء الحساب. حاول مرة أخرى.',
+  network: 'تعذر الاتصال بالخادم. حاول مرة أخرى.',
+}
+
+const normalizePhone = (value) => value.replace(/\D/g, '').slice(0, 15)
+const normalizeCountryCode = (value) => value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '').slice(0, 5)
+
+const splitStoredPhone = (value) => {
+  const digits = normalizePhone(value)
+  if (digits.startsWith('967') && digits.length > 3) {
+    return { countryCode: '+967', phone: digits.slice(3) }
+  }
+  return { countryCode: '+967', phone: digits }
+}
 
 const Home = () => {
-  const [name, setName] = useState('')
+  const [countryCode, setCountryCode] = useState('+967')
   const [phone, setPhone] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [mode, setMode] = useState('login')
   const [status, setStatus] = useState('')
+  const [error, setError] = useState('')
+  const [csrfToken, setCsrfToken] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
-    const storedName = sessionStorage.getItem('clientName') || ''
     const storedPhone = sessionStorage.getItem('clientPhone') || ''
-    setName(storedName)
-    setPhone(storedPhone)
+    const parsedPhone = splitStoredPhone(storedPhone)
+    setCountryCode(parsedPhone.countryCode)
+    setPhone(parsedPhone.phone)
+
+    const loadToken = async () => {
+      setCsrfToken(await getCsrfToken())
+    }
+    loadToken()
   }, [])
 
-  const handleSubmit = (event) => {
+  const submitLabel = useMemo(() => {
+    if (status === 'sending') return mode === 'login' ? 'جاري الدخول...' : 'جاري إنشاء الحساب...'
+    return mode === 'login' ? 'دخول' : 'إنشاء الحساب'
+  }, [mode, status])
+
+  const handleSubmit = async (event) => {
     event.preventDefault()
-    sessionStorage.setItem('clientName', name)
-    sessionStorage.setItem('clientPhone', phone)
-    setStatus('saved')
-    navigate('/bus')
+    setError('')
+
+    const cleanCountryCode = normalizePhone(countryCode)
+    const cleanPhone = normalizePhone(phone)
+    const fullPhone = `${cleanCountryCode}${cleanPhone}`
+    if (cleanCountryCode.length < 1) {
+      setError('أدخل كود الدولة.')
+      return
+    }
+    if (cleanPhone.length < 7) {
+      setError('أدخل رقم جوال صحيح.')
+      return
+    }
+    if (fullPhone.length > 15) {
+      setError('رقم الجوال مع كود الدولة يجب ألا يتجاوز 15 رقماً.')
+      return
+    }
+    if (password.length < 6) {
+      setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل.')
+      return
+    }
+    if (!csrfToken) {
+      setError('تعذر تجهيز رمز الحماية. أعد تحميل الصفحة وحاول مرة أخرى.')
+      return
+    }
+
+    setStatus('sending')
+    try {
+      const response = await fetch(mode === 'login' ? '/api/client/login' : '/api/client/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': csrfToken,
+        },
+        body: JSON.stringify({ phone: fullPhone, password }),
+      })
+      const data = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        throw new Error(data.message || (mode === 'login' ? API_MESSAGES.loginFailed : API_MESSAGES.signupFailed))
+      }
+
+      sessionStorage.setItem('clientPhone', data.phone || fullPhone)
+      sessionStorage.removeItem('clientName')
+      navigate('/bus')
+    } catch (err) {
+      setError(err.message || API_MESSAGES.network)
+      setStatus('')
+    }
   }
 
   return (
-    <main className="pt-[8ch] min-h-[calc(100vh-8ch)] bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100">
-      <div className="max-w-6xl mx-auto px-4 md:px-16 lg:px-28 py-16">
-        <div className="grid gap-10 lg:grid-cols-[1.5fr_1fr] items-start">
-          <section className="space-y-6">
-            <div>
-              <h1 className="text-4xl md:text-5xl font-bold mb-4">دخول العميل</h1>
-              <p className="text-lg leading-8 text-neutral-600 dark:text-neutral-300">
-                أدخل اسم العميل ورقم الجوال هنا، وسيتم استخدام هذه البيانات تلقائياً في نموذج الحجز.
-              </p>
-            </div>
+    <main className="min-h-screen bg-white text-neutral-950" dir="rtl">
+      <div className="relative mx-auto flex min-h-screen w-full max-w-[520px] flex-col overflow-hidden px-7 pb-9 pt-9">
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%] opacity-[0.055]"
+          style={{
+            backgroundImage:
+              'linear-gradient(135deg, transparent 18%, #c59f3b 18%, #c59f3b 26%, transparent 26%), linear-gradient(45deg, transparent 18%, #c59f3b 18%, #c59f3b 26%, transparent 26%)',
+            backgroundSize: '150px 150px',
+            backgroundPosition: '0 0, 75px 0',
+          }}
+        />
 
-            <form onSubmit={handleSubmit} className="space-y-5 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-8 shadow-sm">
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">اسم العميل</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  placeholder="أدخل اسم العميل"
-                  className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
-                />
-              </div>
+        <header className="relative z-10 flex items-center justify-between text-[#bd9b45]">
+          <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-2xl" aria-label="تغيير اللغة">
+            <FaGlobe />
+          </button>
+          <button type="button" className="grid h-7 w-7 place-items-center rounded-md bg-slate-700 text-xs text-white" aria-label="فتح القائمة">
+            <FaChevronDown />
+          </button>
+        </header>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">رقم الجوال</label>
+        <section className="relative z-10 flex flex-1 flex-col items-center">
+          <img src={Logo} alt="المتصدر للنقل البري الدولي" className="mt-8 h-52 w-auto max-w-[78%] object-contain" />
+
+          <h1 className="mt-5 text-center text-4xl font-bold text-[#c39c40]">تسجيل دخول</h1>
+
+          <div className="mt-8 grid h-[58px] w-full grid-cols-2 rounded-full border border-neutral-200 bg-neutral-50 p-0.5 shadow-inner">
+            <button
+              type="button"
+              className="rounded-full bg-[#efc04e] text-xl font-bold text-black shadow-sm"
+            >
+              الجوال
+            </button>
+            <button
+              type="button"
+              className="rounded-full text-xl font-bold text-neutral-400"
+              disabled
+              aria-disabled="true"
+            >
+              البريد الإلكتروني
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-8 w-full space-y-6">
+            <div className="grid grid-cols-[1fr_132px] items-end gap-4">
+              <label className="block">
+                <span className="sr-only">رقم الجوال</span>
                 <input
                   type="tel"
+                  inputMode="numeric"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(event) => setPhone(normalizePhone(event.target.value))}
                   required
-                  placeholder="مثال: 0912345678"
-                  className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
+                  minLength={7}
+                  maxLength={15}
+                  placeholder="رقم الجوال"
+                  className="h-[64px] w-full rounded-2xl border border-neutral-300 bg-white px-5 text-right text-2xl font-semibold text-[#b99a43] outline-none transition focus:border-[#c39c40] focus:ring-4 focus:ring-[#c39c40]/15"
                 />
-              </div>
+              </label>
 
+              <label className="block">
+                <span className="mb-2 block px-4 text-center text-lg font-medium text-[#b99a43]">كود الدولة</span>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  dir="ltr"
+                  value={countryCode}
+                  onChange={(event) => setCountryCode(normalizeCountryCode(event.target.value))}
+                  required
+                  maxLength={5}
+                  placeholder="+967"
+                  className="h-[64px] w-full rounded-2xl border border-neutral-300 bg-white px-4 text-center text-2xl font-bold text-neutral-950 outline-none transition focus:border-[#c39c40] focus:ring-4 focus:ring-[#c39c40]/15"
+                />
+              </label>
+            </div>
+
+            <label className="relative block">
+              <span className="sr-only">كلمة المرور</span>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                minLength={6}
+                placeholder="كلمة المرور"
+                className="h-[64px] w-full rounded-2xl border border-neutral-300 bg-white px-5 pl-16 text-right text-2xl font-semibold text-[#b99a43] outline-none transition focus:border-[#c39c40] focus:ring-4 focus:ring-[#c39c40]/15"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute left-5 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center text-2xl text-neutral-500"
+                aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+              >
+                {showPassword ? <FaEyeSlash /> : <FaEye />}
+              </button>
+            </label>
+
+            {mode === 'login' && (
+              <button type="button" className="text-right text-lg font-semibold text-[#b99a43]">
+                هل نسيت كلمة المرور؟
+              </button>
+            )}
+
+            {error && (
+              <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p>
+            )}
+
+            <div className="space-y-5 pt-3">
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-full bg-violet-600 px-8 py-3 text-white font-semibold shadow-lg shadow-violet-200/30 hover:bg-violet-700 transition"
+                disabled={status === 'sending'}
+                className="h-[66px] w-full rounded-xl bg-[#c6a044] text-2xl font-bold text-white shadow-lg shadow-[#c6a044]/25 transition hover:bg-[#b89238] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                اذهب إلى نموذج الحجز
+                {submitLabel}
               </button>
 
-              {status === 'saved' && (
-                <p className="text-sm text-green-700 dark:text-green-300">تم حفظ بيانات العميل بنجاح. الانتقال إلى نموذج الحجز...</p>
-              )}
-            </form>
-          </section>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.removeItem('clientPhone')
+                  sessionStorage.removeItem('clientName')
+                  navigate('/bus')
+                }}
+                className="h-[66px] w-full rounded-xl bg-black text-2xl font-bold text-white shadow-lg shadow-black/10 transition hover:bg-neutral-900"
+              >
+                دخول كزائر
+              </button>
+            </div>
+          </form>
 
-          <aside className="space-y-6 bg-violet-50 dark:bg-neutral-900/80 border border-violet-200 dark:border-neutral-800 rounded-3xl p-8">
-            <h2 className="text-2xl font-semibold">معلومات مهمة</h2>
-            <p className="text-neutral-600 dark:text-neutral-300 leading-7">
-              عند حفظ بيانات العميل هنا، ستظهر تلقائياً في صفحة الحجز لتسريع العملية وتقليل الأخطاء.
-            </p>
-          </aside>
-        </div>
+          <button
+            type="button"
+            onClick={() => {
+              setError('')
+              setStatus('')
+              setMode((value) => (value === 'login' ? 'register' : 'login'))
+            }}
+            className="mt-8 text-center text-lg font-semibold text-[#837143] underline underline-offset-4"
+          >
+            {mode === 'login' ? 'ليس لديك حساب؟ قم بإنشاء حساب الآن!' : 'لديك حساب؟ تسجيل الدخول الآن!'}
+          </button>
+
+          <p className="mt-10 text-center text-lg text-neutral-900" dir="ltr">
+            الإصدار : 2025-11-10 1.0.4.29
+          </p>
+        </section>
       </div>
     </main>
   )

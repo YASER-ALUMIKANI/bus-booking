@@ -32,6 +32,7 @@ const Bus = () => {
   const [destination, setDestination] = useState('')
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [csrfToken, setCsrfToken] = useState('')
 
   useEffect(() => {
@@ -142,6 +143,7 @@ const Bus = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    setSuccessMessage('')
     const namePattern = /^[\u0600-\u06FF\u0621-\u064A\u0660-\u0669A-Za-z ]{3,100}$/
     const phonePattern = /^[0-9]{7,15}$/
     const passportPattern = /^[A-Za-z0-9-]{5,20}$/
@@ -238,6 +240,7 @@ const Bus = () => {
         destination,
       }
       setStatus('success')
+      setSuccessMessage(`تم حفظ الحجز بنجاح. رقم التذكرة: ${ticket.ticketNumber}`)
       openPrintWindow(ticket)
       setPassport('')
       setPassportImage(null)
@@ -447,6 +450,12 @@ const Bus = () => {
 
               {error && (
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              )}
+
+              {successMessage && (
+                <p className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-200">
+                  {successMessage}
+                </p>
               )}
 
 

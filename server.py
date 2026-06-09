@@ -70,6 +70,16 @@ def init_db():
         )
         """
     )
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS client_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        )
+        """
+    )
     for username, entry in DEFAULT_ADMIN_USERS.items():
         row = db.execute("SELECT 1 FROM admin_users WHERE username = ?", (username,)).fetchone()
         if row is None:
@@ -147,6 +157,11 @@ def get_admin_user(username):
     return db.execute("SELECT * FROM admin_users WHERE username = ?", (username,)).fetchone()
 
 
+def get_client_user(phone):
+    db = get_db()
+    return db.execute("SELECT * FROM client_users WHERE phone = ?", (phone,)).fetchone()
+
+
 def get_client_ip():
     forwarded = request.headers.get("X-Forwarded-For", "")
     if forwarded:
@@ -221,6 +236,10 @@ def validate_phone(phone: str) -> bool:
     return bool(re.fullmatch(r"^[0-9]{7,15}$", phone))
 
 
+def validate_password(password: str) -> bool:
+    return isinstance(password, str) and 6 <= len(password) <= 128
+
+
 def validate_passport(passport: str) -> bool:
     if not isinstance(passport, str):
         return False
@@ -258,6 +277,56 @@ def travel_date_available(travel_date: str) -> bool:
 
 with app.app_context():
     init_db()
+
+
+@app.route("/api/client/register", methods=["POST"])
+def client_register():
+    if not request.is_json:
+        return jsonify({"message": "Invalid request payload."}), 400
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+
+    data = request.get_json()
+    phone = data.get("phone", "")
+    password = data.get("password", "")
+
+    if not validate_phone(phone):
+        return jsonify({"message": "رقم الجوال غير صالح. يجب أن يحتوي على 7 إلى 15 رقماً."}), 400
+    if not validate_password(password):
+        return jsonify({"message": "كلمة المرور يجب أن تكون بين 6 و128 حرفاً."}), 400
+
+    db = get_db()
+    existing = get_client_user(phone)
+    if existing:
+        return jsonify({"message": "رقم الجوال موجود بالفعل. سجل الدخول أو استخدم رقماً آخر."}), 400
+
+    db.execute(
+        "INSERT INTO client_users (phone, password_hash, created_at) VALUES (?, ?, ?)",
+        (phone, generate_password_hash(password), int(time.time() * 1000)),
+    )
+    db.commit()
+    return jsonify({"message": "تم إنشاء الحساب بنجاح.", "phone": phone}), 201
+
+
+@app.route("/api/client/login", methods=["POST"])
+def client_login():
+    if not request.is_json:
+        return jsonify({"message": "Invalid request payload."}), 400
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+
+    data = request.get_json()
+    phone = data.get("phone", "")
+    password = data.get("password", "")
+
+    if not validate_phone(phone) or not validate_password(password):
+        return jsonify({"message": "رقم الجوال أو كلمة المرور غير صحيحة."}), 401
+
+    row = get_client_user(phone)
+    if not row or not check_password_hash(row["password_hash"], password):
+        return jsonify({"message": "رقم الجوال أو كلمة المرور غير صحيحة."}), 401
+
+    return jsonify({"message": "تم تسجيل الدخول بنجاح.", "phone": phone}), 200
 
 
 @app.route("/api/bookings", methods=["POST"])

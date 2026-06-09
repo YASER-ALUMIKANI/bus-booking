@@ -24,6 +24,7 @@ const AdminNotifications = () => {
   const [role, setRole] = useState('')
   const [csrfToken, setCsrfToken] = useState('')
   const [zoomedPassportUrl, setZoomedPassportUrl] = useState('')
+  const [selectedDate, setSelectedDate] = useState('')
   const navigate = useNavigate()
 
   const getToken = () => localStorage.getItem('adminToken')
@@ -63,6 +64,12 @@ const AdminNotifications = () => {
 
   useEffect(() => {
     fetchBookings()
+    const refreshInterval = window.setInterval(fetchBookings, 10000)
+    window.addEventListener('focus', fetchBookings)
+    return () => {
+      window.clearInterval(refreshInterval)
+      window.removeEventListener('focus', fetchBookings)
+    }
   }, [])
 
   useEffect(() => {
@@ -194,7 +201,11 @@ const AdminNotifications = () => {
     }
   }
 
-  const bookingCounts = bookings.reduce(
+  const visibleBookings = selectedDate
+    ? bookings.filter((booking) => booking.travel_date === selectedDate)
+    : bookings
+
+  const bookingCounts = visibleBookings.reduce(
     (acc, booking) => {
       if (booking.status === 'confirmed') acc.confirmed += 1
       else if (booking.status === 'cancelled') acc.cancelled += 1
@@ -245,17 +256,46 @@ const AdminNotifications = () => {
           </div>
         </div>
 
+        <div className="mb-8 rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="w-full md:max-w-xs">
+              <label className="mb-2 block text-sm font-medium text-neutral-600 dark:text-neutral-300">
+                فلتر حسب تاريخ الرحلة
+              </label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-neutral-900 outline-none transition focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:focus:ring-violet-900"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                المعروض: <span className="font-semibold text-neutral-800 dark:text-neutral-100">{visibleBookings.length}</span> من {bookings.length}
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelectedDate('')}
+                className="inline-flex items-center justify-center rounded-full border border-violet-600 bg-white px-6 py-3 text-sm font-semibold text-violet-600 transition hover:bg-violet-50 dark:bg-neutral-950 dark:hover:bg-neutral-900"
+              >
+                إظهار الكل
+              </button>
+            </div>
+          </div>
+        </div>
+
         {loading ? (
           <p className="text-neutral-600 dark:text-neutral-400">جارٍ تحميل الإشعارات...</p>
         ) : error ? (
           <p className="text-red-600 dark:text-red-400 mb-6">{error}</p>
-        ) : bookings.length === 0 ? (
+        ) : visibleBookings.length === 0 ? (
           <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-8">
             <p className="text-neutral-600 dark:text-neutral-400">لا توجد إشعارات حجز جديدة بعد.</p>
           </div>
         ) : (
           <div className="space-y-6">
-            {bookings.map((booking) => (
+            {visibleBookings.map((booking) => (
               <div key={booking.id} className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 flex-1">

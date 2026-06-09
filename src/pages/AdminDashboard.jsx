@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getCsrfToken } from '../utils/csrf'
 
@@ -15,6 +15,12 @@ const AdminDashboard = () => {
   const [creatingUser, setCreatingUser] = useState(false)
   const [csrfToken, setCsrfToken] = useState('')
   const navigate = useNavigate()
+
+  // Database view state
+  const [dbSearch, setDbSearch] = useState('')
+  const [dbStatusFilter, setDbStatusFilter] = useState('all')
+  const [dbPage, setDbPage] = useState(1)
+  const DB_PAGE_SIZE = 10
 
   const getToken = () => localStorage.getItem('adminToken')
 
@@ -325,57 +331,196 @@ const AdminDashboard = () => {
                 ))}
               </div>
 
-            {role === 'manager' && showDatabase && (
-              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
-                <h2 className="text-xl font-semibold text-slate-900 mb-4">محتوى قاعدة البيانات</h2>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-100">
-                      <tr>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">معرّف</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">المسافر</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">الهاتف</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">الجواز</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">من</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">إلى</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">التاريخ</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">الحالة</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">الحالة المطلوبة</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">سبب الإلغاء</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">سبب طلب الإلغاء</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">مقفول</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">طلب تغيير</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">موافقة</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">ضيف</th>
-                        <th className="px-4 py-3 text-right font-semibold text-slate-700">طابع زمني</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {bookings.map((booking) => (
-                        <tr key={booking.id} className="bg-white">
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.id}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.passenger_name}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.phone}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.passport}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.origin}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.destination}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.travel_date}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.status}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.requested_status || '-'}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.cancellation_reason || '-'}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.requested_cancellation_reason || '-'}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.locked ? 'نعم' : 'لا'}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.change_requested ? 'نعم' : 'لا'}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.approval_granted ? 'نعم' : 'لا'}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.guest ? 'نعم' : 'لا'}</td>
-                          <td className="px-4 py-3 text-right text-slate-600">{booking.timestamp}</td>
+            {role === 'manager' && showDatabase && (() => {
+              // --- Filtered + paginated data ---
+              const filtered = bookings.filter((b) => {
+                const matchSearch =
+                  dbSearch === '' ||
+                  (b.passenger_name || '').toLowerCase().includes(dbSearch.toLowerCase()) ||
+                  (b.phone || '').includes(dbSearch) ||
+                  (b.passport || '').toLowerCase().includes(dbSearch.toLowerCase()) ||
+                  (b.origin || '').toLowerCase().includes(dbSearch.toLowerCase()) ||
+                  (b.destination || '').toLowerCase().includes(dbSearch.toLowerCase()) ||
+                  (b.id || '').toLowerCase().includes(dbSearch.toLowerCase())
+                const matchStatus = dbStatusFilter === 'all' || b.status === dbStatusFilter
+                return matchSearch && matchStatus
+              })
+              const totalPages = Math.max(1, Math.ceil(filtered.length / DB_PAGE_SIZE))
+              const safePage = Math.min(dbPage, totalPages)
+              const pageData = filtered.slice((safePage - 1) * DB_PAGE_SIZE, safePage * DB_PAGE_SIZE)
+
+              const statusBadge = (status) => {
+                const map = {
+                  confirmed: 'bg-green-100 text-green-700 border border-green-300',
+                  cancelled: 'bg-red-100 text-red-700 border border-red-300',
+                  pending: 'bg-yellow-100 text-yellow-700 border border-yellow-300',
+                }
+                const labelMap = { confirmed: 'مؤكد', cancelled: 'ملغي', pending: 'معلق' }
+                const cls = map[status] || 'bg-slate-100 text-slate-600 border border-slate-300'
+                return (
+                  <span className={`inline-block rounded-full px-3 py-0.5 text-xs font-semibold ${cls}`}>
+                    {labelMap[status] || status || '-'}
+                  </span>
+                )
+              }
+
+              const handleExcelDownload = () => {
+                const headers = ['معرّف','المسافر','الهاتف','الجواز','من','إلى','تاريخ السفر','الحالة','الحالة المطلوبة','سبب الإلغاء','سبب طلب الإلغاء','مقفول','طلب تغيير','موافقة','ضيف','الطابع الزمني']
+                const rows = filtered.map((b) => [
+                  b.id, b.passenger_name, b.phone, b.passport,
+                  b.origin, b.destination, b.travel_date, b.status,
+                  b.requested_status || '', b.cancellation_reason || '',
+                  b.requested_cancellation_reason || '',
+                  b.locked ? 'نعم' : 'لا',
+                  b.change_requested ? 'نعم' : 'لا',
+                  b.approval_granted ? 'نعم' : 'لا',
+                  b.guest ? 'نعم' : 'لا',
+                  b.timestamp,
+                ])
+                const csvContent = [headers, ...rows]
+                  .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+                  .join('\n')
+                const BOM = '\uFEFF'
+                const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `bookings_${new Date().toISOString().slice(0,10)}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+              }
+
+              return (
+                <div className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                  {/* Header */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-slate-50 border-b border-slate-200 px-6 py-4">
+                    <div>
+                      <h2 className="text-lg font-bold text-slate-900">محتوى قاعدة البيانات</h2>
+                      <p className="text-xs text-slate-500 mt-0.5">{filtered.length} سجل من أصل {bookings.length}</p>
+                    </div>
+                    <button
+                      onClick={handleExcelDownload}
+                      className="inline-flex items-center gap-2 rounded-full bg-emerald-600 hover:bg-emerald-700 transition px-5 py-2.5 text-sm font-semibold text-white shadow-sm"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      تنزيل Excel
+                    </button>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                    <div className="relative flex-1">
+                      <svg className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                      </svg>
+                      <input
+                        type="text"
+                        value={dbSearch}
+                        onChange={(e) => { setDbSearch(e.target.value); setDbPage(1) }}
+                        placeholder="بحث بالاسم، الهاتف، الجواز، الوجهة..."
+                        className="w-full rounded-xl border border-slate-200 bg-white pr-9 pl-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                      />
+                    </div>
+                    <select
+                      value={dbStatusFilter}
+                      onChange={(e) => { setDbStatusFilter(e.target.value); setDbPage(1) }}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
+                    >
+                      <option value="all">كل الحالات</option>
+                      <option value="pending">معلق</option>
+                      <option value="confirmed">مؤكد</option>
+                      <option value="cancelled">ملغي</option>
+                    </select>
+                  </div>
+
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-100 text-sm" dir="rtl">
+                      <thead className="bg-slate-100">
+                        <tr>
+                          {['معرّف','المسافر','الهاتف','الجواز','من','إلى','التاريخ','الحالة','الحالة المطلوبة','سبب الإلغاء','سبب طلب الإلغاء','مقفول','طلب تغيير','موافقة','ضيف','الطابع الزمني'].map((h) => (
+                            <th key={h} className="px-4 py-3 text-right text-xs font-bold text-slate-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {pageData.length === 0 ? (
+                          <tr>
+                            <td colSpan={16} className="px-4 py-10 text-center text-slate-400 text-sm">لا توجد نتائج مطابقة</td>
+                          </tr>
+                        ) : pageData.map((booking, idx) => (
+                          <tr key={booking.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'} style={{transition:'background 0.15s'}}>
+                            <td className="px-4 py-3 text-right text-slate-500 font-mono text-xs max-w-[120px] truncate" title={booking.id}>{booking.id}</td>
+                            <td className="px-4 py-3 text-right text-slate-800 font-medium whitespace-nowrap">{booking.passenger_name}</td>
+                            <td className="px-4 py-3 text-right text-slate-600 whitespace-nowrap">{booking.phone}</td>
+                            <td className="px-4 py-3 text-right text-slate-600">{booking.passport}</td>
+                            <td className="px-4 py-3 text-right text-slate-600 whitespace-nowrap">{booking.origin}</td>
+                            <td className="px-4 py-3 text-right text-slate-600 whitespace-nowrap">{booking.destination}</td>
+                            <td className="px-4 py-3 text-right text-slate-600 whitespace-nowrap">{booking.travel_date}</td>
+                            <td className="px-4 py-3 text-right">{statusBadge(booking.status)}</td>
+                            <td className="px-4 py-3 text-right text-slate-500">{booking.requested_status || '-'}</td>
+                            <td className="px-4 py-3 text-right text-slate-500 max-w-[150px] truncate" title={booking.cancellation_reason}>{booking.cancellation_reason || '-'}</td>
+                            <td className="px-4 py-3 text-right text-slate-500 max-w-[150px] truncate" title={booking.requested_cancellation_reason}>{booking.requested_cancellation_reason || '-'}</td>
+                            <td className="px-4 py-3 text-right">
+                              <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${booking.locked ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>{booking.locked ? 'نعم' : 'لا'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${booking.change_requested ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'}`}>{booking.change_requested ? 'نعم' : 'لا'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${booking.approval_granted ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}>{booking.approval_granted ? 'نعم' : 'لا'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${booking.guest ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'}`}>{booking.guest ? 'نعم' : 'لا'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-slate-500 text-xs whitespace-nowrap">{booking.timestamp}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50">
+                      <p className="text-xs text-slate-500">
+                        صفحة {safePage} من {totalPages} — عرض {(safePage-1)*DB_PAGE_SIZE+1}–{Math.min(safePage*DB_PAGE_SIZE, filtered.length)} من {filtered.length}
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setDbPage((p) => Math.max(1, p - 1))}
+                          disabled={safePage === 1}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                        >السابق</button>
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          const start = Math.max(1, Math.min(safePage - 2, totalPages - 4))
+                          const pg = start + i
+                          if (pg > totalPages) return null
+                          return (
+                            <button
+                              key={pg}
+                              onClick={() => setDbPage(pg)}
+                              className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition ${
+                                pg === safePage
+                                  ? 'border-violet-600 bg-violet-600 text-white'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >{pg}</button>
+                          )
+                        })}
+                        <button
+                          onClick={() => setDbPage((p) => Math.min(totalPages, p + 1))}
+                          disabled={safePage === totalPages}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                        >التالي</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )
+            })()}
           </>
         )}
       </div>
