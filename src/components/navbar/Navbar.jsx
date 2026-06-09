@@ -9,6 +9,8 @@ import Theme from '../theme/Theme';
 const Navbar = () => {
 
     const [open, setOpen] = React.useState(false);
+    const [deferredPrompt, setDeferredPrompt] = React.useState(null);
+    const [showInstall, setShowInstall] = React.useState(false);
 
     const navLinks = [
         { href: "/", label: "Home" },
@@ -23,6 +25,39 @@ const Navbar = () => {
 
     const handleClose = () => {
         setOpen(false);
+    }
+
+    React.useEffect(() => {
+        const handleBeforeInstallPrompt = (event) => {
+            event.preventDefault();
+            setDeferredPrompt(event);
+            setShowInstall(true);
+        }
+
+        const handleAppInstalled = () => {
+            setShowInstall(false);
+            setDeferredPrompt(null);
+        }
+
+        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+        window.addEventListener('appinstalled', handleAppInstalled);
+
+        return () => {
+            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.removeEventListener('appinstalled', handleAppInstalled);
+        }
+    }, []);
+
+    const handleInstallClick = async () => {
+        if (!deferredPrompt) return;
+
+        deferredPrompt.prompt();
+        const choiceResult = await deferredPrompt.userChoice;
+
+        if (choiceResult.outcome === 'accepted') {
+            setShowInstall(false);
+            setDeferredPrompt(null);
+        }
     }
 
     return (
@@ -70,6 +105,14 @@ const Navbar = () => {
                             <p className="text-xs font-normal text-neutral-50 tracking-wide">738518881</p>
                         </div>
                     </div>
+                    {showInstall && (
+                        <button
+                            onClick={handleInstallClick}
+                            className="bg-green-600 hover:bg-green-700 text-white rounded-md px-4 py-2 text-sm font-medium transition"
+                        >
+                            تثبيت التطبيق
+                        </button>
+                    )}
                     {/* Theme */}
                     <Theme />
                 </div>
