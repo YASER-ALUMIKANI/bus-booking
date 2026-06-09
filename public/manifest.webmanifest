@@ -1,6 +1,6 @@
 {
   "name": "Online Bus Ticket Booking",
-  "short_name": "BusBooking",
+  "short_name": "يمن باص",
   "description": "A progressive web app for booking bus tickets and managing routes.",
   "start_url": "/",
   "scope": "/",
