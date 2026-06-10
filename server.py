@@ -8,6 +8,7 @@ import time
 from flask import Flask, send_from_directory, abort, request, jsonify, g, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from PIL import Image
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_FILE = BASE_DIR / "app.db"
@@ -37,9 +38,31 @@ DEFAULT_ADMIN_USERS = {
 TOKENS = {}
 
 VALID_STATUSES = {"pending", "confirmed", "cancelled"}
-VALID_COMPANIES = {"البركة", "المتصدر", "البراق"}
-VALID_CITIES = {"البيضاء", "صنعاء", "عدن", "تعز", "الحديدة", "ذمار", "الرياض", "جدة", "الدمام", "أبها", "مكة"}
+VALID_COMPANIES = {"البركة", "المتصدر", "البراق", "إكسبرس"}
+VALID_CITIES = {"البيضاء", "صنعاء", "عدن", "تعز", "الحديدة", "ذمار", "الرياض", "جدة", "الدمام", "أبها", "مكة", "إب", "نجران"}
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
+
+# Dangerous extensions that must never appear anywhere in the filename
+DANGEROUS_EXTENSIONS = {
+    "php", "php3", "php4", "php5", "phtml", "phar",
+    "asp", "aspx", "asa", "asax",
+    "jsp", "jspx",
+    "py", "rb", "pl", "sh", "bash", "cgi",
+    "exe", "dll", "bat", "cmd", "ps1",
+    "htaccess", "htpasswd",
+    "svg", "xml", "html", "htm",  # can contain scripts
+}
+
+# Real image magic bytes: (offset, signature_bytes)
+IMAGE_MAGIC: dict[str, list[tuple[int, bytes]]] = {
+    "jpg":  [(0, b"\xff\xd8\xff")],
+    "jpeg": [(0, b"\xff\xd8\xff")],
+    "png":  [(0, b"\x89PNG\r\n\x1a\n")],
+    "webp": [(0, b"RIFF"), (8, b"WEBP")],
+}
+
 UPLOAD_DIR = BASE_DIR / "uploads" / "passports"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -116,10 +139,46 @@ def init_db():
         """
         CREATE TABLE IF NOT EXISTS schedules (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            travel_date TEXT UNIQUE NOT NULL
+            travel_date TEXT NOT NULL,
+            company TEXT NOT NULL,
+            UNIQUE(travel_date, company)
         )
         """
     )
+    schedules_cols = [row[1] for row in db.execute("PRAGMA table_info(schedules)").fetchall()]
+    if "company" not in schedules_cols:
+        # Check if table already has data/exists
+        has_old = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='schedules'").fetchone()
+        if has_old:
+            db.execute("ALTER TABLE schedules RENAME TO schedules_old")
+            db.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schedules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    travel_date TEXT NOT NULL,
+                    company TEXT NOT NULL,
+                    UNIQUE(travel_date, company)
+                )
+                """
+            )
+            db.execute("INSERT OR IGNORE INTO schedules (id, travel_date, company) SELECT id, travel_date, 'البركة' FROM schedules_old")
+            db.execute("DROP TABLE schedules_old")
+
+    # Update schedules table columns
+    schedules_cols = [row[1] for row in db.execute("PRAGMA table_info(schedules)").fetchall()]
+    new_schedule_cols = {
+        "price": "INTEGER NOT NULL DEFAULT 35000",
+        "bus_type": "TEXT NOT NULL DEFAULT 'VIP'",
+        "total_seats": "INTEGER NOT NULL DEFAULT 40",
+        "trip_time": "TEXT NOT NULL DEFAULT '06:30:00 PM'",
+        "notes": "TEXT NOT NULL DEFAULT 'الصعود من عفار'",
+        "issuing_office": "TEXT NOT NULL DEFAULT 'وكيل اب مساعد كامل'"
+    }
+    for col_name, col_def in new_schedule_cols.items():
+        if col_name not in schedules_cols:
+            db.execute(f"ALTER TABLE schedules ADD COLUMN {col_name} {col_def}")
+
+    # Update bookings table columns
     columns = [row[1] for row in db.execute("PRAGMA table_info(bookings)").fetchall()]
     if "cancellation_reason" not in columns:
         db.execute("ALTER TABLE bookings ADD COLUMN cancellation_reason TEXT")
@@ -127,11 +186,29 @@ def init_db():
         db.execute("ALTER TABLE bookings ADD COLUMN requested_cancellation_reason TEXT")
     if "passport_image" not in columns:
         db.execute("ALTER TABLE bookings ADD COLUMN passport_image TEXT")
+
+    new_booking_cols = {
+        "company": "TEXT",
+        "seat": "INTEGER",
+        "dob": "TEXT",
+        "trip_time": "TEXT",
+        "arrival_time": "TEXT",
+        "day_of_week": "TEXT",
+        "issuing_office": "TEXT",
+        "price": "INTEGER",
+        "notes": "TEXT",
+        "bus_type": "TEXT"
+    }
+    for col_name, col_type in new_booking_cols.items():
+        if col_name not in columns:
+            db.execute(f"ALTER TABLE bookings ADD COLUMN {col_name} {col_type}")
+
     db.commit()
 
 
 def row_to_booking(row):
     passport_image = row["passport_image"] if "passport_image" in row.keys() else None
+    keys = row.keys()
     return {
         "id": row["id"],
         "passenger_name": row["passenger_name"],
@@ -151,6 +228,16 @@ def row_to_booking(row):
         "approval_granted": bool(row["approval_granted"]),
         "guest": bool(row["guest"]),
         "timestamp": row["timestamp"],
+        "company": row["company"] if "company" in keys else None,
+        "seat": row["seat"] if "seat" in keys else None,
+        "dob": row["dob"] if "dob" in keys else None,
+        "trip_time": row["trip_time"] if "trip_time" in keys else None,
+        "arrival_time": row["arrival_time"] if "arrival_time" in keys else None,
+        "day_of_week": row["day_of_week"] if "day_of_week" in keys else None,
+        "issuing_office": row["issuing_office"] if "issuing_office" in keys else None,
+        "price": row["price"] if "price" in keys else None,
+        "notes": row["notes"] if "notes" in keys else None,
+        "bus_type": row["bus_type"] if "bus_type" in keys else None,
     }
 
 
@@ -213,13 +300,65 @@ def get_or_create_csrf_token() -> str:
 def allowed_image_filename(filename: str) -> bool:
     if not isinstance(filename, str) or "." not in filename:
         return False
-    extension = filename.rsplit(".", 1)[1].lower()
+    parts = filename.lower().split(".")
+    # Reject double extensions containing dangerous keywords
+    for segment in parts[:-1]:
+        if segment in DANGEROUS_EXTENSIONS:
+            return False
+    extension = parts[-1]
     return extension in ALLOWED_IMAGE_EXTENSIONS
+
+
+def verify_image_magic(file_storage) -> bool:
+    """Uses PIL to open and verify the image contents and boundaries."""
+    try:
+        # Save current position
+        pos = file_storage.stream.tell()
+    except Exception:
+        pos = 0
+    try:
+        # PIL open and verify
+        img = Image.open(file_storage.stream)
+        img.verify()
+        
+        # Seek back and reopen to check size
+        file_storage.stream.seek(pos)
+        img = Image.open(file_storage.stream)
+        if img.width > 5000 or img.height > 5000:
+            file_storage.stream.seek(pos)
+            return False
+            
+        file_storage.stream.seek(pos)
+        return True
+    except Exception:
+        try:
+            file_storage.stream.seek(pos)
+        except Exception:
+            pass
+        return False
+
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    max_mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+    return jsonify({"message": f"حجم الملف كبير جداً. الحد الأقصى المسموح به هو {max_mb} ميغابايت."}), 413
 
 
 @app.route("/api/csrf-token", methods=["GET"])
 def get_csrf_token():
     return jsonify({"csrfToken": get_or_create_csrf_token()}), 200
+
+
+def calculate_arrival_time(trip_time_str: str) -> str:
+    from datetime import datetime, timedelta
+    for fmt in ("%I:%M:%S %p", "%I:%M %p", "%H:%M:%S", "%H:%M"):
+        try:
+            dt = datetime.strptime(trip_time_str.strip(), fmt)
+            arrival_dt = dt - timedelta(hours=1)
+            return arrival_dt.strftime(fmt)
+        except ValueError:
+            continue
+    return "05:30:00 PM"
 
 
 def validate_passenger_name(name: str) -> bool:
@@ -351,6 +490,12 @@ def create_booking():
         origin = form.get("origin")
         destination = form.get("destination")
         company = form.get("company")
+        seat = form.get("seat")
+        dob = form.get("dob")
+        trip_time = form.get("tripTime")
+        arrival_time = form.get("arrivalTime")
+        issuing_office = form.get("issuingOffice")
+        notes = form.get("notes")
         guest = form.get("guest", False)
     elif request.is_json:
         data = request.get_json()
@@ -361,16 +506,28 @@ def create_booking():
         origin = data.get("origin")
         destination = data.get("destination")
         company = data.get("company")
+        seat = data.get("seat")
+        dob = data.get("dob")
+        trip_time = data.get("tripTime")
+        arrival_time = data.get("arrivalTime")
+        issuing_office = data.get("issuingOffice")
+        notes = data.get("notes")
         guest = data.get("guest", False)
     else:
         return jsonify({"message": "Invalid request payload."}), 400
 
-    if not all([passenger_name, phone, passport, travel_date, origin, destination, company]):
+    if not all([passenger_name, phone, passport, travel_date, origin, destination, company, seat, dob]):
         return jsonify({"message": "جميع الحقول مطلوبة."}), 400
 
     origin = origin.strip()
     destination = destination.strip()
     company = company.strip()
+    dob = dob.strip()
+
+    try:
+        seat = int(seat)
+    except (ValueError, TypeError):
+        return jsonify({"message": "رقم المقعد يجب أن يكون رقماً صحيحاً."}), 400
 
     if origin == destination:
         return jsonify({"message": "يجب أن تكون الوجهة مختلفة عن نقطة الانطلاق."}), 400
@@ -394,9 +551,40 @@ def create_booking():
         return jsonify({"message": "يرجى رفع صورة جواز السفر."}), 400
     if not allowed_image_filename(passport_image_file.filename):
         return jsonify({"message": "صيغة صورة الجواز غير مدعومة. استخدم JPG أو PNG أو WEBP."}), 400
+    if not verify_image_magic(passport_image_file):
+        return jsonify({"message": "الملف المرفوع ليس صورة حقيقية. يُسمح فقط بصور JPG أو PNG أو WEBP."}), 400
 
-    if not travel_date_available(travel_date):
-        return jsonify({"message": "تاريخ المغادرة غير متاح. اختر تاريخاً من التقويم المصرح به."}), 400
+    db = get_db()
+    
+    # Get schedule details
+    schedule = db.execute("SELECT id, price, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules WHERE travel_date = ? AND company = ?", (travel_date, company)).fetchone()
+    if not schedule:
+        return jsonify({"message": "تاريخ المغادرة أو شركة النقل غير متاحة في الجدول."}), 400
+
+    price = schedule["price"]
+    bus_type = schedule["bus_type"]
+    total_seats = schedule["total_seats"]
+    trip_time = schedule["trip_time"]
+    notes = schedule["notes"]
+    issuing_office = schedule["issuing_office"]
+    arrival_time = calculate_arrival_time(trip_time)
+
+    if seat < 1 or seat > total_seats:
+        return jsonify({"message": f"رقم المقعد غير صالح. يجب أن يكون بين 1 و {total_seats}."}), 400
+
+    # Check seat availability
+    already_booked = db.execute("SELECT 1 FROM bookings WHERE travel_date = ? AND company = ? AND seat = ? AND status != 'cancelled'", (travel_date, company, seat)).fetchone()
+    if already_booked:
+        return jsonify({"message": "عذراً، هذا المقعد محجوز بالفعل. الرجاء اختيار مقعد آخر."}), 400
+
+    # Calculate day of week
+    from datetime import datetime
+    days_ar = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+    try:
+        dt = datetime.strptime(travel_date, "%Y-%m-%d")
+        day_of_week = days_ar[dt.weekday()]
+    except Exception:
+        day_of_week = "الاثنين"
 
     booking_id = secrets.token_hex(8)
     filename = secure_filename(passport_image_file.filename)
@@ -404,10 +592,10 @@ def create_booking():
     passport_image_filename = f"{booking_id}.{extension}"
     passport_image_path = UPLOAD_DIR / passport_image_filename
     passport_image_file.save(passport_image_path)
-    db = get_db()
+    
     db.execute(
-        "INSERT INTO bookings (id, passenger_name, phone, passport, passport_image, travel_date, origin, destination, status, requested_status, cancellation_reason, requested_cancellation_reason, locked, change_requested, approval_granted, guest, timestamp)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO bookings (id, passenger_name, phone, passport, passport_image, travel_date, origin, destination, status, requested_status, cancellation_reason, requested_cancellation_reason, locked, change_requested, approval_granted, guest, timestamp, company, seat, dob, trip_time, arrival_time, day_of_week, issuing_office, price, notes, bus_type)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             booking_id,
             passenger_name,
@@ -426,6 +614,16 @@ def create_booking():
             0,
             int(bool(guest)),
             int(time.time() * 1000),
+            company,
+            seat,
+            dob,
+            trip_time,
+            arrival_time,
+            day_of_week,
+            issuing_office,
+            price,
+            notes,
+            bus_type,
         ),
     )
     db.commit()
@@ -444,7 +642,13 @@ def create_booking():
     logger.info("  Guest user: %s", guest)
     logger.info("  Ticket number: %s", ticket_number)
 
-    return jsonify({"message": "Booking request received.", "ticketNumber": ticket_number}), 201
+    return jsonify({
+        "message": "Booking request received.",
+        "ticketNumber": ticket_number,
+        "dayOfWeek": day_of_week,
+        "price": price,
+        "busType": bus_type
+    }), 201
 
 
 @app.route("/api/admin/login", methods=["POST"])
@@ -529,8 +733,18 @@ def get_bookings():
 @app.route("/api/schedules", methods=["GET"])
 def get_schedules():
     db = get_db()
-    rows = db.execute("SELECT id, travel_date FROM schedules ORDER BY travel_date ASC").fetchall()
-    dates = [{"id": r["id"], "travelDate": r["travel_date"]} for r in rows]
+    rows = db.execute("SELECT id, travel_date, company, price, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules ORDER BY travel_date ASC").fetchall()
+    dates = [{
+        "id": r["id"],
+        "travelDate": r["travel_date"],
+        "company": r["company"],
+        "price": r["price"],
+        "busType": r["bus_type"],
+        "totalSeats": r["total_seats"],
+        "tripTime": r["trip_time"],
+        "notes": r["notes"],
+        "issuingOffice": r["issuing_office"]
+    } for r in rows]
     return jsonify({"dates": dates}), 200
 
 @app.route('/uploads/passports/<path:filename>')
@@ -552,17 +766,81 @@ def create_schedule():
         return jsonify({"message": "Invalid request payload."}), 400
     data = request.get_json()
     travel_date = data.get("travelDate")
-    if not travel_date:
-        return jsonify({"message": "travelDate is required."}), 400
+    company = data.get("company")
+    price = data.get("price", 35000)
+    bus_type = data.get("busType", "VIP")
+    total_seats = data.get("totalSeats", 40)
+    trip_time = data.get("tripTime", "06:30:00 PM")
+    notes = data.get("notes", "الصعود من عفار")
+    issuing_office = data.get("issuingOffice", "وكيل اب مساعد كامل")
+ 
+    if not travel_date or not company:
+        return jsonify({"message": "travelDate and company are required."}), 400
+    if not validate_company(company):
+        return jsonify({"message": "شركة النقل غير صالحة."}), 400
+    
+    try:
+        price = int(price)
+        total_seats = int(total_seats)
+        if price <= 0 or total_seats <= 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        return jsonify({"message": "السعر وعدد المقاعد يجب أن تكون أرقاماً موجبة."}), 400
+ 
+    if bus_type not in {"VIP", "عادي"}:
+        return jsonify({"message": "نوع الباص غير صالح."}), 400
+ 
+    if not isinstance(trip_time, str) or not trip_time.strip():
+        return jsonify({"message": "وقت الرحلة غير صالح."}), 400
+    trip_time = trip_time.strip()
+
+    if not isinstance(notes, str) or not notes.strip():
+        return jsonify({"message": "الملاحظات غير صالحة."}), 400
+    notes = notes.strip()
+
+    if not isinstance(issuing_office, str) or not issuing_office.strip():
+        return jsonify({"message": "مكتب الإصدار غير صالح."}), 400
+    issuing_office = issuing_office.strip()
+ 
     db = get_db()
     try:
-        cur = db.execute("INSERT OR IGNORE INTO schedules (travel_date) VALUES (?)", (travel_date,))
+        cur = db.execute(
+            "INSERT OR IGNORE INTO schedules (travel_date, company, price, bus_type, total_seats, trip_time, notes, issuing_office) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (travel_date, company, price, bus_type, total_seats, trip_time, notes, issuing_office)
+        )
         db.commit()
         # fetch inserted id
-        row = db.execute("SELECT id, travel_date FROM schedules WHERE travel_date = ?", (travel_date,)).fetchone()
+        row = db.execute("SELECT id, travel_date, company, price, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules WHERE travel_date = ? AND company = ?", (travel_date, company)).fetchone()
     except Exception as e:
         return jsonify({"message": str(e)}), 500
-    return jsonify({"message": "Schedule added.", "schedule": {"id": row["id"], "travelDate": row["travel_date"]}}), 201
+    return jsonify({
+        "message": "Schedule added.",
+        "schedule": {
+            "id": row["id"],
+            "travelDate": row["travel_date"],
+            "company": row["company"],
+            "price": row["price"],
+            "busType": row["bus_type"],
+            "totalSeats": row["total_seats"],
+            "tripTime": row["trip_time"],
+            "notes": row["notes"],
+            "issuingOffice": row["issuing_office"]
+        }
+    }), 201
+
+@app.route("/api/schedules/<int:schedule_id>/booked-seats", methods=["GET"])
+def get_booked_seats(schedule_id: int):
+    db = get_db()
+    schedule = db.execute("SELECT travel_date, company FROM schedules WHERE id = ?", (schedule_id,)).fetchone()
+    if not schedule:
+        return jsonify({"message": "Schedule not found."}), 404
+    
+    rows = db.execute(
+        "SELECT seat FROM bookings WHERE travel_date = ? AND company = ? AND status != 'cancelled'",
+        (schedule["travel_date"], schedule["company"])
+    ).fetchall()
+    booked_seats = [r["seat"] for r in rows if r["seat"] is not None]
+    return jsonify({"bookedSeats": booked_seats}), 200
 
 
 @app.route("/api/schedules/<int:schedule_id>", methods=["DELETE"])

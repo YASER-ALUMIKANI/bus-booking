@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import DatePicker from '../components/DatePicker/DatePicker'
 import { getCsrfToken } from '../utils/csrf'
+import { openPrintWindow } from '../utils/printTicket'
 
 const cityOptions = [
   'البيضاء',
@@ -14,10 +15,36 @@ const cityOptions = [
   'الدمام',
   'أبها',
   'مكة',
+  'إب',
+  'نجران',
 ]
 
-const companyOptions = ['البركة', 'المتصدر', 'البراق']
+const companyOptions = ['البركة', 'المتصدر', 'البراق', 'إكسبرس']
 
+const getArrivalTime = (timeStr) => {
+  if (!timeStr) return '05:30:00 PM';
+  const match = timeStr.match(/^(\d+):(\d+):?(\d+)?\s*(AM|PM)?$/i);
+  if (!match) return '05:30:00 PM';
+  
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2];
+  const seconds = match[3] || '00';
+  let ampm = match[4] || '';
+  
+  if (hours === 12) {
+    hours = 11;
+    if (ampm.toUpperCase() === 'PM') ampm = 'AM';
+    else if (ampm.toUpperCase() === 'AM') ampm = 'PM';
+  } else if (hours === 1) {
+    hours = 12;
+  } else {
+    hours = hours - 1;
+  }
+  
+  const pad = (n) => String(n).padStart(2, '0');
+  const formattedAmPm = ampm ? ' ' + ampm : '';
+  return `${pad(hours)}:${minutes}:${seconds}${formattedAmPm}`;
+}
 
 const Bus = () => {
   const [passengerName, setPassengerName] = useState('')
@@ -30,6 +57,13 @@ const Bus = () => {
   const [company, setCompany] = useState('البركة')
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
+  const [seat, setSeat] = useState(null)
+  const [dob, setDob] = useState('1985')
+  const [tripTime, setTripTime] = useState('06:30:00 PM')
+  const [arrivalTime, setArrivalTime] = useState('05:30:00 PM')
+  const [issuingOffice, setIssuingOffice] = useState('وكيل اب مساعد كامل')
+  const [notes, setNotes] = useState('الصعود من عفار')
+  const [bookedSeats, setBookedSeats] = useState([])
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
@@ -64,6 +98,146 @@ const Bus = () => {
     loadToken()
   }, [])
 
+  const selectedSchedule = availableDates.find(
+    (d) => d.company === company && d.travelDate === travelDate
+  )
+
+  useEffect(() => {
+    if (selectedSchedule) {
+      const time = selectedSchedule.tripTime || '06:30:00 PM'
+      setTripTime(time)
+      setNotes(selectedSchedule.notes || 'الصعود من عفار')
+      setIssuingOffice(selectedSchedule.issuingOffice || 'وكيل اب مساعد كامل')
+      setArrivalTime(getArrivalTime(time))
+    } else {
+      setTripTime('06:30:00 PM')
+      setNotes('الصعود من عفار')
+      setIssuingOffice('وكيل اب مساعد كامل')
+      setArrivalTime('05:30:00 PM')
+    }
+  }, [selectedSchedule])
+
+  useEffect(() => {
+    if (travelDate && availableDates.length > 0) {
+      const isDateValidForCompany = availableDates.some(
+        (d) => d.company === company && d.travelDate === travelDate
+      )
+      if (!isDateValidForCompany) {
+        setTravelDate('')
+      }
+    }
+  }, [company, availableDates])
+
+  useEffect(() => {
+    const fetchBookedSeats = async () => {
+      if (selectedSchedule) {
+        try {
+          const res = await fetch(`/api/schedules/${selectedSchedule.id}/booked-seats`)
+          if (res.ok) {
+            const data = await res.json()
+            setBookedSeats(data.bookedSeats || [])
+          }
+        } catch (e) {
+          // ignore
+        }
+      } else {
+        setBookedSeats([])
+      }
+    }
+    fetchBookedSeats()
+  }, [travelDate, company, availableDates])
+
+  useEffect(() => {
+    if (seat && bookedSeats.includes(seat)) {
+      setSeat(null)
+    }
+  }, [bookedSeats, seat])
+
+  const renderSeatButton = (seatNum) => {
+    const isBooked = bookedSeats.includes(seatNum)
+    const isSelected = seat === seatNum
+    
+    let btnClasses = "w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm transition-all "
+    if (isBooked) {
+      btnClasses += "bg-red-100 dark:bg-red-950 border border-red-200 dark:border-red-900 text-red-400 cursor-not-allowed"
+    } else if (isSelected) {
+      btnClasses += "bg-violet-600 text-white shadow-lg shadow-violet-200/50 dark:shadow-violet-900/50 ring-2 ring-violet-400 scale-105"
+    } else {
+      btnClasses += "bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:border-violet-500 dark:hover:border-violet-500 hover:text-violet-600 dark:hover:text-violet-400"
+    }
+    
+    return (
+      <button
+        key={seatNum}
+        type="button"
+        disabled={isBooked}
+        onClick={() => setSeat(seatNum)}
+        className={btnClasses}
+        title={isBooked ? `المقعد ${seatNum} محجوز` : `المقعد ${seatNum}`}
+      >
+        {seatNum}
+      </button>
+    )
+  }
+
+  const renderSeatGrid = () => {
+    if (!selectedSchedule) return null
+    const total = selectedSchedule.totalSeats || 40
+    const seats = []
+    
+    for (let i = 1; i <= total; i += 4) {
+      const rowSeats = []
+      for (let j = 0; j < 4; j++) {
+        if (i + j <= total) {
+          rowSeats.push(i + j)
+        }
+      }
+      seats.push(rowSeats)
+    }
+    
+    return (
+      <div className="border border-neutral-200 dark:border-neutral-800 rounded-3xl p-6 bg-neutral-50 dark:bg-neutral-950 mt-4 md:col-span-2">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-sm font-bold text-neutral-700 dark:text-neutral-300">اختر رقم المقعد</h4>
+          <div className="flex gap-4 text-xs">
+            <span className="flex items-center gap-1"><span className="w-3.5 h-3.5 rounded bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 inline-block"></span> متاح</span>
+            <span className="flex items-center gap-1"><span className="w-3.5 h-3.5 rounded bg-violet-600 inline-block"></span> محدد</span>
+            <span className="flex items-center gap-1"><span className="w-3.5 h-3.5 rounded bg-red-100 dark:bg-red-950 border border-red-200 dark:border-red-900 inline-block"></span> محجوز</span>
+          </div>
+        </div>
+        
+        {/* Bus Front Indicator */}
+        <div className="w-full flex justify-center mb-6">
+          <div className="w-24 py-1 text-center bg-neutral-200 dark:bg-neutral-800 text-xs font-bold text-neutral-500 rounded-t-xl border-t border-x border-neutral-300 dark:border-neutral-700 relative">
+            مقدمة الحافلة (السائق)
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1 w-2.5 h-1 bg-neutral-400 dark:bg-neutral-600 rounded-t-sm"></div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-5 gap-3 max-w-sm mx-auto">
+          {seats.map((row, rIdx) => (
+            <React.Fragment key={rIdx}>
+              {/* Column 1: Window Left */}
+              {row[0] !== undefined ? renderSeatButton(row[0]) : <div />}
+              {/* Column 2: Aisle Left */}
+              {row[1] !== undefined ? renderSeatButton(row[1]) : <div />}
+              
+              {/* Column 3: The Aisle Spacer */}
+              <div className="flex items-center justify-center text-[10px] text-neutral-400 dark:text-neutral-600 font-bold select-none">
+                ممر
+              </div>
+              
+              {/* Column 4: Aisle Right */}
+              {row[2] !== undefined ? renderSeatButton(row[2]) : <div />}
+              {/* Column 5: Window Right */}
+              {row[3] !== undefined ? renderSeatButton(row[3]) : <div />}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   const handlePassportImageChange = (event) => {
     const file = event.target.files?.[0]
     if (!file) {
@@ -75,71 +249,6 @@ const Bus = () => {
     setPassportPreview(URL.createObjectURL(file))
   }
 
-  const openPrintWindow = (ticket) => {
-    if (typeof window === 'undefined') return
-    const printWindow = window.open('', '_blank', 'width=900,height=700')
-    if (!printWindow) return
-
-    const escapeHtml = (str) =>
-      String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;')
-
-    const safeTicketNumber = escapeHtml(ticket.ticketNumber)
-    const safeCompany = escapeHtml(ticket.company)
-    const safePassengerName = escapeHtml(ticket.passengerName)
-    const safePhone = escapeHtml(ticket.phone)
-    const safeTravelDate = escapeHtml(ticket.travelDate)
-    const safeOrigin = escapeHtml(ticket.origin)
-    const safeDestination = escapeHtml(ticket.destination)
-
-    const html = `
-      <html lang="ar">
-      <head>
-        <meta charset="UTF-8" />
-        <title>تذكرة مبدئية</title>
-        <style>
-          body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; direction: rtl; background: #f3f2ff; color: #111827; }
-          .page { padding: 2rem; max-width: 840px; margin: auto; }
-          .card { background: #ffffff; border-radius: 1.5rem; padding: 2rem; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.1); }
-          .title { font-size: 1.9rem; margin-bottom: 1.5rem; font-weight: 700; }
-          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-          .item { padding: 1.2rem; border: 1px solid #e5e7eb; border-radius: 1rem; background: #fafafa; }
-          .label { display: block; margin-bottom: 0.5rem; color: #6b7280; font-size: 0.9rem; }
-          .value { font-size: 1.15rem; font-weight: 700; word-break: break-word; }
-          .footer { margin-top: 1.75rem; text-align: center; }
-          .print-button { padding: 0.95rem 1.4rem; background: #7c3aed; border: none; border-radius: 9999px; color: white; font-size: 1rem; font-weight: 700; cursor: pointer; }
-          @media print { .print-button { display: none; } body { background: #fff; } }
-        </style>
-      </head>
-      <body>
-        <div class="page">
-          <div class="card">
-            <div class="title">تذكرة مبدئية</div>
-            <div class="grid">
-              <div class="item"><span class="label">رقم التذكرة</span><span class="value">${safeTicketNumber}</span></div>
-              <div class="item"><span class="label">شركة النقل</span><span class="value">${safeCompany}</span></div>
-              <div class="item"><span class="label">اسم المسافر</span><span class="value">${safePassengerName}</span></div>
-              <div class="item"><span class="label">رقم الجوال</span><span class="value">${safePhone}</span></div>
-              <div class="item"><span class="label">تاريخ المغادرة</span><span class="value">${safeTravelDate}</span></div>
-              <div class="item" style="grid-column: span 2;"><span class="label">الرحلة</span><span class="value">من ${safeOrigin} إلى ${safeDestination}</span></div>
-            </div>
-            <div class="footer">
-              <button class="print-button" onclick="window.print()">طباعة هذه الصفحة</button>
-            </div>
-          </div>
-        </div>
-      </body>
-      </html>
-    `
-
-    printWindow.document.write(html)
-    printWindow.document.close()
-    printWindow.focus()
-  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -194,6 +303,14 @@ const Bus = () => {
       setError('حجم الصورة كبير جدًا. الرجاء اختيار صورة أقل من 5 ميجابايت.')
       return
     }
+    if (!seat) {
+      setError('يرجى اختيار رقم المقعد من حافلة المقاعد.')
+      return
+    }
+    if (!dob || !dob.trim()) {
+      setError('يرجى إدخال العمر / سنة الميلاد.')
+      return
+    }
 
     setStatus('sending')
     setError('')
@@ -207,6 +324,8 @@ const Bus = () => {
     formData.append('origin', origin.trim())
     formData.append('destination', destination.trim())
     formData.append('passportImage', passportImage)
+    formData.append('seat', seat)
+    formData.append('dob', dob.trim())
 
     try {
       if (!csrfToken) {
@@ -238,6 +357,15 @@ const Bus = () => {
         company,
         origin,
         destination,
+        seat,
+        dob: dob.trim(),
+        tripTime,
+        arrivalTime,
+        dayOfWeek: data.dayOfWeek || 'الاثنين',
+        issuingOffice,
+        price: data.price || selectedSchedule?.price || '35000',
+        notes,
+        busType: data.busType || selectedSchedule?.busType || 'VIP'
       }
       setStatus('success')
       setSuccessMessage(`تم حفظ الحجز بنجاح. رقم التذكرة: ${ticket.ticketNumber}`)
@@ -248,6 +376,8 @@ const Bus = () => {
       setTravelDate('')
       setOrigin('')
       setDestination('')
+      setSeat(null)
+      setDob('1985')
     } catch (err) {
       setError(err.message)
       setStatus('')
@@ -299,20 +429,33 @@ const Bus = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">رقم الجواز</label>
-                <input
-                  type="text"
-                  value={passport}
-                  onChange={(e) => setPassport(e.target.value)}
-                  required
-                  minLength={5}
-                  maxLength={20}
-                  pattern="^[A-Za-z0-9-]{5,20}$"
-                  title="رقم الجواز يجب أن يحتوي على أحرف أو أرقام أو شرطات فقط، وطوله بين 5 و20 حرفاً."
-                  placeholder="اكتب رقم الجواز"
-                  className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
-                />
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">رقم الجواز</label>
+                  <input
+                    type="text"
+                    value={passport}
+                    onChange={(e) => setPassport(e.target.value)}
+                    required
+                    minLength={5}
+                    maxLength={20}
+                    pattern="^[A-Za-z0-9-]{5,20}$"
+                    title="رقم الجواز يجب أن يحتوي على أحرف أو أرقام أو شرطات فقط، وطوله بين 5 و20 حرفاً."
+                    placeholder="اكتب رقم الجواز"
+                    className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">العمر / سنة الميلاد</label>
+                  <input
+                    type="text"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    required
+                    placeholder="مثال: 1995"
+                    className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
+                  />
+                </div>
               </div>
 
               <div>
@@ -414,6 +557,33 @@ const Bus = () => {
                 </div>
 
               </div>
+
+              {selectedSchedule && (
+                <div className="grid gap-4 grid-cols-2 md:grid-cols-5 p-5 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800">
+                  <div>
+                    <span className="block text-xs text-neutral-500 dark:text-neutral-400">وقت الرحلة</span>
+                    <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">{tripTime}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-neutral-500 dark:text-neutral-400">وقت الحضور</span>
+                    <span className="text-sm font-semibold text-red-600 dark:text-red-400">{arrivalTime}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-neutral-500 dark:text-neutral-400">مكتب الإصدار</span>
+                    <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">{issuingOffice}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-neutral-500 dark:text-neutral-400">السعر</span>
+                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">{selectedSchedule.price} ريال</span>
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <span className="block text-xs text-neutral-500 dark:text-neutral-400">نقطة الركوب</span>
+                    <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">{notes}</span>
+                  </div>
+                </div>
+              )}
+
+              {renderSeatGrid()}
           
 
               <div className="grid gap-5 md:grid-cols-2">

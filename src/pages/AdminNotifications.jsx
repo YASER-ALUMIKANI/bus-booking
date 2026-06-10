@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getCsrfToken } from '../utils/csrf'
+import { openPrintWindow } from '../utils/printTicket'
 
 const statusLabels = {
   pending: 'معلق',
@@ -404,6 +405,32 @@ const AdminNotifications = () => {
                           </button>
                           {booking.status === 'confirmed' ? (
                             <>
+                              <button
+                                onClick={() => {
+                                  openPrintWindow({
+                                    ticketNumber: `T-${booking.id}`,
+                                    passengerName: booking.passenger_name,
+                                    phone: booking.phone,
+                                    passport: booking.passport,
+                                    travelDate: booking.travel_date,
+                                    company: booking.company,
+                                    origin: booking.origin,
+                                    destination: booking.destination,
+                                    seat: booking.seat,
+                                    dob: booking.dob,
+                                    tripTime: booking.trip_time,
+                                    arrivalTime: booking.arrival_time,
+                                    dayOfWeek: booking.day_of_week || 'الاثنين',
+                                    issuingOffice: booking.issuing_office,
+                                    price: booking.price,
+                                    notes: booking.notes,
+                                    busType: booking.bus_type
+                                  });
+                                }}
+                                className="w-full rounded-full bg-violet-600 px-4 py-2 text-white font-semibold hover:bg-violet-700 transition"
+                              >
+                                طباعة التذكرة
+                              </button>
                               <textarea
                                 value={requestReasons[booking.id] || ''}
                                 onChange={(e) => setRequestReasons((prev) => ({ ...prev, [booking.id]: e.target.value }))}

@@ -94,17 +94,22 @@ const Navbar = () => {
                 </ul>
 
                 <div className="flex md:items-center items-start gap-x-5 gap-y-2 flex-wrap md:flex-row flex-col text-base font-medium text-neutral-800">
-                    <div className="relative bg-violet-600 rounded-md px-8 py-2 w-fit cursor-pointer">
+                    <a
+                        href="https://wa.me/967738518881"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative bg-violet-600 rounded-md px-8 py-2 w-fit cursor-pointer block hover:bg-violet-700 transition"
+                    >
                         <div className="absolute top-[50%] -left-6 translate-y-[-50%] w-9 h-9 rounded-full bg-violet-600 border-4 border-neutral-100 dark:border-neutral-900 flex items-center justify-center">
                             <FaPhone className='text-neutral-50 text-sm' />
                         </div>
                         <div className="space-y-0.5">
                             <p className="text-xs text-neutral-200 font-light">
-                                للتواصل ?
+                                للتواصل ؟
                             </p>
                             <p className="text-xs font-normal text-neutral-50 tracking-wide">738518881</p>
                         </div>
-                    </div>
+                    </a>
                     {showInstall && (
                         <button
                             onClick={handleInstallClick}
