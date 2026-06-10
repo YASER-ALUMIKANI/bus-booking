@@ -125,7 +125,7 @@ const Home = () => {
         </header>
 
         <section className="relative z-10 flex flex-1 flex-col items-center">
-          <img src={Logo} alt="المتصدر للنقل البري الدولي" className="mt-8 h-52 w-auto max-w-[78%] object-contain" />
+          <img src={Logo} alt="يمن باص" className="mt-8 h-52 w-auto max-w-[78%] object-contain" />
 
           <h1 className="mt-5 text-center text-4xl font-bold text-[#c39c40]">تسجيل دخول</h1>
 
@@ -246,7 +246,7 @@ const Home = () => {
           </button>
 
           <p className="mt-10 text-center text-lg text-neutral-900" dir="ltr">
-            الإصدار : 2025-11-10 1.0.4.29
+            الإصدار : 2026-06-01 1.0.4.01
           </p>
         </section>
       </div>

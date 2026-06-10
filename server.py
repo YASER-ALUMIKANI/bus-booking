@@ -14,9 +14,11 @@ DB_FILE = BASE_DIR / "app.db"
 DIST_DIR = BASE_DIR / "dist"
 
 app = Flask(__name__, static_folder=str(DIST_DIR / "assets"), static_url_path="/assets")
-app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
+_default_secret = "yemenbus-dev-secret-key-change-in-production-2026"
+app.secret_key = os.environ.get("SECRET_KEY", _default_secret)
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = False
 
 logging.basicConfig(
     level=logging.INFO,
