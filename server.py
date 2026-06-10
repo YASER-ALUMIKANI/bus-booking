@@ -446,6 +446,7 @@ def client_register():
         (phone, generate_password_hash(password), int(time.time() * 1000)),
     )
     db.commit()
+    session["client_phone"] = phone
     return jsonify({"message": "تم إنشاء الحساب بنجاح.", "phone": phone}), 201
 
 
@@ -467,7 +468,26 @@ def client_login():
     if not row or not check_password_hash(row["password_hash"], password):
         return jsonify({"message": "رقم الجوال أو كلمة المرور غير صحيحة."}), 401
 
-    return jsonify({"message": "تم تسجيل الدخول بنجاح.", "phone": phone}), 200
+    session["client_phone"] = row["phone"]
+    return jsonify({"message": "تم تسجيل الدخول بنجاح.", "phone": row["phone"]}), 200
+
+
+@app.route("/api/client/bookings", methods=["GET"])
+def get_client_bookings():
+    phone = session.get("client_phone")
+    if not phone:
+        return jsonify({"message": "يرجى تسجيل الدخول أولاً."}), 401
+
+    db = get_db()
+    rows = db.execute("SELECT * FROM bookings WHERE phone = ? ORDER BY timestamp DESC", (phone,)).fetchall()
+    bookings = [row_to_booking(row) for row in rows]
+    return jsonify({"bookings": bookings}), 200
+
+
+@app.route("/api/client/logout", methods=["POST"])
+def client_logout():
+    session.pop("client_phone", None)
+    return jsonify({"message": "تم تسجيل الخروج بنجاح."}), 200
 
 
 @app.route("/api/bookings", methods=["POST"])
