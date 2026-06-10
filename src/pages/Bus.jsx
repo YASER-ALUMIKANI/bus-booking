@@ -68,6 +68,12 @@ const Bus = () => {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
   const [csrfToken, setCsrfToken] = useState('')
+  const [lastTicket, setLastTicket] = useState(null)
+
+  const handleValChange = (setter, val) => {
+    setter(val)
+    setLastTicket(null)
+  }
 
   useEffect(() => {
     const storedName = sessionStorage.getItem('clientName')
@@ -184,7 +190,7 @@ const Bus = () => {
         key={seatNum}
         type="button"
         disabled={isBooked}
-        onClick={() => setSeat(seatNum)}
+        onClick={() => handleValChange(setSeat, seatNum)}
         className={btnClasses}
         title={isBooked ? `المقعد ${seatNum} محجوز` : `المقعد ${seatNum}`}
       >
@@ -298,6 +304,7 @@ const Bus = () => {
   }
 
   const handlePassportImageChange = (event) => {
+    setLastTicket(null)
     const file = event.target.files?.[0]
     if (!file) {
       setPassportImage(null)
@@ -433,6 +440,7 @@ const Bus = () => {
       }
       setStatus('success')
       setSuccessMessage(`تم حفظ الحجز بنجاح. رقم التذكرة: ${ticket.ticketNumber}`)
+      setLastTicket(ticket)
       openPrintWindow(ticket)
       setPassport('')
       setPassportImage(null)
@@ -466,7 +474,7 @@ const Bus = () => {
                 <input
                   type="text"
                   value={passengerName}
-                  onChange={(e) => setPassengerName(e.target.value)}
+                  onChange={(e) => handleValChange(setPassengerName, e.target.value)}
                   required
                   minLength={3}
                   maxLength={100}
@@ -482,7 +490,7 @@ const Bus = () => {
                 <input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => handleValChange(setPhone, e.target.value)}
                   required
                   minLength={7}
                   maxLength={15}
@@ -499,7 +507,7 @@ const Bus = () => {
                   <input
                     type="text"
                     value={passport}
-                    onChange={(e) => setPassport(e.target.value)}
+                    onChange={(e) => handleValChange(setPassport, e.target.value)}
                     required
                     minLength={5}
                     maxLength={20}
@@ -514,7 +522,7 @@ const Bus = () => {
                   <input
                     type="text"
                     value={dob}
-                    onChange={(e) => setDob(e.target.value)}
+                    onChange={(e) => handleValChange(setDob, e.target.value)}
                     required
                     placeholder="مثال: 1995"
                     className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
@@ -555,7 +563,7 @@ const Bus = () => {
                   ) : (
                     <>
                       <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 p-3">
-                        <DatePicker availableDates={filteredDates} value={travelDate} onChange={setTravelDate} />
+                        <DatePicker availableDates={filteredDates} value={travelDate} onChange={(date) => handleValChange(setTravelDate, date)} />
                       </div>
                       {travelDate ? (
                         <p className="mt-3 text-sm text-neutral-700 dark:text-neutral-300">
@@ -581,7 +589,7 @@ const Bus = () => {
                           name="company"
                           value={c}
                           checked={company === c}
-                          onChange={() => setCompany(c)}
+                          onChange={() => handleValChange(setCompany, c)}
                           className="form-radio text-violet-600"
                         />
                         <span className="text-neutral-700 dark:text-neutral-300">
@@ -627,7 +635,7 @@ const Bus = () => {
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">من</label>
                   <select
                     value={origin}
-                    onChange={(e) => setOrigin(e.target.value)}
+                    onChange={(e) => handleValChange(setOrigin, e.target.value)}
                     required
                     className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
                   >
@@ -642,7 +650,7 @@ const Bus = () => {
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">إلى</label>
                   <select
                     value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
+                    onChange={(e) => handleValChange(setDestination, e.target.value)}
                     required
                     className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
                   >
@@ -665,13 +673,25 @@ const Bus = () => {
               )}
 
 
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center rounded-full bg-violet-600 px-8 py-3 text-white font-semibold shadow-lg shadow-violet-200/30 hover:bg-violet-700 transition"
-                disabled={status === 'sending'}
-              >
-                {status === 'sending' ? 'جاري الإرسال...' : 'إرسال الحجز'}
-              </button>
+              <div className="flex gap-4 items-center flex-wrap">
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center rounded-full bg-violet-600 px-8 py-3 text-white font-semibold shadow-lg shadow-violet-200/30 hover:bg-violet-700 transition"
+                  disabled={status === 'sending'}
+                >
+                  {status === 'sending' ? 'جاري الإرسال...' : 'إرسال الحجز'}
+                </button>
+
+                {lastTicket && (
+                  <button
+                    type="button"
+                    onClick={() => openPrintWindow(lastTicket)}
+                    className="inline-flex items-center justify-center rounded-full bg-green-600 px-8 py-3 text-white font-semibold shadow-lg shadow-green-200/30 hover:bg-green-700 transition"
+                  >
+                    طباعة الفاتورة / التذكرة
+                  </button>
+                )}
+              </div>
             </form>
           </section>
 
