@@ -596,6 +596,34 @@ def get_client_status():
     }), 200
 
 
+@app.route("/api/client/delete-account", methods=["POST"])
+def client_delete_account():
+    phone = session.get("client_phone")
+    if not phone:
+        return jsonify({"message": "يرجى تسجيل الدخول أولاً."}), 401
+
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+
+    db = get_db()
+    try:
+        # Delete verification requests
+        db.execute("DELETE FROM verification_requests WHERE phone = ?", (phone,))
+        # Delete bookings
+        db.execute("DELETE FROM bookings WHERE phone = ?", (phone,))
+        # Delete the client user
+        db.execute("DELETE FROM client_users WHERE phone = ?", (phone,))
+        db.commit()
+        
+        # Clear session
+        session.pop("client_phone", None)
+        return jsonify({"message": "تم حذف الحساب بنجاح وكل البيانات المرتبطة به."}), 200
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to delete client account for %s: %s", phone, str(e))
+        return jsonify({"message": "حدث خطأ أثناء حذف الحساب. يرجى المحاولة لاحقاً."}), 500
+
+
 @app.route("/api/client/verify", methods=["POST"])
 def client_submit_verify():
     phone = session.get("client_phone")

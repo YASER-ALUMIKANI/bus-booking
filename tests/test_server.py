@@ -294,6 +294,64 @@ class YemenBusServerTestCase(unittest.TestCase):
                         except Exception:
                             pass
 
+    def test_client_delete_account(self):
+        # 1. Register and login client
+        original_csrf = server.require_csrf_token
+        server.require_csrf_token = lambda: True
+        try:
+            # Register client
+            res = self.client.post(
+                "/api/client/register",
+                json={"phone": "779999999", "password": "password123"}
+            )
+            self.assertEqual(res.status_code, 201)
+
+            # Insert a dummy booking for this client
+            with server.app.app_context():
+                db = server.get_db()
+                db.execute(
+                    """
+                    INSERT INTO bookings (id, passenger_name, phone, passport, travel_date, origin, destination, status, locked, change_requested, approval_granted, guest, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("test-delete-booking-1", "Test Delete", "779999999", "A000000", "2026-06-25", "صنعاء", "عدن", "pending", 0, 0, 0, 0, int(time.time() * 1000))
+                )
+                db.commit()
+
+            # Verify booking exists
+            with server.app.app_context():
+                db = server.get_db()
+                b = db.execute("SELECT 1 FROM bookings WHERE phone = '779999999'").fetchone()
+                self.assertIsNotNone(b)
+
+            # Call delete account API
+            res = self.client.post(
+                "/api/client/delete-account",
+                headers={"X-CSRF-Token": "dummy_csrf"}
+            )
+            self.assertEqual(res.status_code, 200)
+
+            # Verify client, bookings and verification_requests are deleted
+            with server.app.app_context():
+                db = server.get_db()
+                client = db.execute("SELECT 1 FROM client_users WHERE phone = '779999999'").fetchone()
+                booking = db.execute("SELECT 1 FROM bookings WHERE phone = '779999999'").fetchone()
+                self.assertIsNone(client)
+                self.assertIsNone(booking)
+
+            # Verify session is cleared (client/status returns isLoggedIn: False)
+            res = self.client.get("/api/client/status")
+            self.assertFalse(res.get_json()["isLoggedIn"])
+
+        finally:
+            server.require_csrf_token = original_csrf
+            # Clean up client and booking just in case
+            with server.app.app_context():
+                db = server.get_db()
+                db.execute("DELETE FROM client_users WHERE phone = '779999999'")
+                db.execute("DELETE FROM bookings WHERE phone = '779999999'")
+                db.commit()
+
     def test_create_schedule_with_separate_pricing(self):
         # Verify we can add a schedule with separate pricing for adults and children
         with server.app.app_context():

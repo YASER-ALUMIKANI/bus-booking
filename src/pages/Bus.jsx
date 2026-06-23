@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DatePicker from '../components/DatePicker/DatePicker'
 import { getCsrfToken } from '../utils/csrf'
@@ -89,6 +89,13 @@ const Bus = () => {
   const [selectedSchedule, setSelectedSchedule] = useState(null)
   const [searching, setSearching] = useState(false)
   const [currentPromoSlide, setCurrentPromoSlide] = useState(0)
+
+  // Profile dropdown and account deletion modal states
+  const [showUserDropdown, setShowUserDropdown] = useState(false)
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [deleteConfirmError, setDeleteConfirmError] = useState('')
+  const dropdownRef = useRef(null)
 
   const totalPassengers = searchAdults + searchChildren
 
@@ -189,6 +196,17 @@ const Bus = () => {
     if (storedName) setPassengerName(storedName)
     if (storedPhone) setPhone(storedPhone)
     fetchClientStatus()
+  }, [])
+
+  // Handle click outside user dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowUserDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
   useEffect(() => {
@@ -960,51 +978,146 @@ const Bus = () => {
     navigate('/')
   }
 
+  const handleClientDeleteAccount = async () => {
+    setDeletingAccount(true)
+    setDeleteConfirmError('')
+    try {
+      const res = await fetch('/api/client/delete-account', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        }
+      })
+      const data = await res.json()
+      if (res.ok) {
+        sessionStorage.removeItem('clientPhone')
+        sessionStorage.removeItem('clientName')
+        setShowDeleteConfirmModal(false)
+        setShowUserDropdown(false)
+        navigate('/')
+      } else {
+        setDeleteConfirmError(data.message || 'حدث خطأ أثناء حذف الحساب.')
+      }
+    } catch (e) {
+      setDeleteConfirmError('حدث خطأ في الاتصال بالخادم.')
+    } finally {
+      setDeletingAccount(false)
+    }
+  }
+
   return (
     <main className="pt-[8ch] min-h-[calc(100vh-8ch)] bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 font-sans" dir="rtl">
       <div className="max-w-6xl mx-auto px-4 md:px-16 lg:px-28 py-12">
         
-        {/* Top Header: Greeting, past bookings and logout */}
+        {/* Top Header: Greeting, past bookings and user profile dropdown */}
         <div className="flex justify-between items-center mb-8 flex-row gap-4 border-b border-neutral-200 dark:border-neutral-800 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950 flex items-center justify-center font-bold text-orange-600 text-sm">
-              👤
-            </div>
-            <div>
-              <p className="text-xs text-neutral-400">مرحباً بك،</p>
-              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                {sessionStorage.getItem('clientName') || 'ياسر الحميّقاني'}
-              </h2>
-            </div>
+          <div className="relative" ref={dropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                if (sessionStorage.getItem('clientPhone')) {
+                  setShowUserDropdown(!showUserDropdown)
+                }
+              }}
+              className="flex items-center gap-3 focus:outline-none hover:opacity-80 transition cursor-pointer select-none text-right"
+              aria-expanded={showUserDropdown}
+            >
+              <div className="w-10 h-10 rounded-full bg-orange-100 dark:bg-orange-950 flex items-center justify-center font-bold text-orange-600 text-sm shadow-sm ring-2 ring-orange-500/20">
+                👤
+              </div>
+              <div>
+                <p className="text-xs text-neutral-400">مرحباً بك،</p>
+                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  {sessionStorage.getItem('clientName') || (sessionStorage.getItem('clientPhone') ? `عميل (${sessionStorage.getItem('clientPhone')})` : 'زائر')}
+                  {sessionStorage.getItem('clientPhone') && (
+                    <svg className={`w-3 h-3 text-neutral-400 transition-transform duration-200 ${showUserDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  )}
+                </h2>
+              </div>
+            </button>
+
+            {/* Dropdown Menu */}
+            {showUserDropdown && sessionStorage.getItem('clientPhone') && (
+              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-xl z-50 py-2 animate-fadeIn origin-top-right divide-y divide-neutral-100 dark:divide-neutral-800">
+                {/* Account Details / Stats */}
+                <div className="px-4 py-3 text-xs text-neutral-500 dark:text-neutral-400 space-y-1">
+                  <div className="font-bold text-neutral-800 dark:text-neutral-200">معلومات الحساب</div>
+                  <div>الجوال: <span className="font-mono text-neutral-700 dark:text-neutral-300">{sessionStorage.getItem('clientPhone')}</span></div>
+                  <div>حالة التوثيق: <span className={`font-semibold ${verificationStatus === 'verified' ? 'text-green-600 dark:text-green-400' : verificationStatus === 'pending' ? 'text-amber-500' : 'text-red-500'}`}>
+                    {verificationStatus === 'verified' ? 'موثق' : verificationStatus === 'pending' ? 'قيد المراجعة' : 'غير موثق'}
+                  </span></div>
+                </div>
+
+                <div className="py-1">
+                  {/* My Bookings */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserDropdown(false)
+                      setShowMyBookings(true)
+                      fetchMyBookings()
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-right text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition"
+                  >
+                    <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    حجوزاتي
+                  </button>
+                  
+                  {/* Logout */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserDropdown(false)
+                      handleClientLogout()
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-right text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition"
+                  >
+                    <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    تسجيل الخروج
+                  </button>
+                </div>
+
+                <div className="py-1">
+                  {/* Delete Account */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserDropdown(false)
+                      setShowDeleteConfirmModal(true)
+                    }}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-right text-xs font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 transition"
+                  >
+                    <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    حذف الحساب نهائياً
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="flex gap-2">
             {sessionStorage.getItem('clientPhone') && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowMyBookings(true)
-                    fetchMyBookings()
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 hover:bg-violet-700 px-5 py-2.5 text-xs font-semibold text-white shadow transition"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                  حجوزاتي
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClientLogout}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-red-600 hover:bg-red-700 px-5 py-2.5 text-xs font-semibold text-white shadow transition"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  تسجيل الخروج
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMyBookings(true)
+                  fetchMyBookings()
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-violet-600 hover:bg-violet-700 px-5 py-2.5 text-xs font-semibold text-white shadow transition"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                حجوزاتي
+              </button>
             )}
           </div>
         </div>
@@ -1812,6 +1925,55 @@ const Bus = () => {
                 className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-5 py-2 text-sm font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
               >
                 إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Confirmation Modal */}
+      {showDeleteConfirmModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-6 text-right" dir="rtl">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/50 flex items-center justify-center font-bold text-lg">
+                ⚠️
+              </div>
+              <div>
+                <h3 className="text-base font-bold">حذف الحساب نهائياً</h3>
+                <p className="text-xs text-red-500 font-semibold">تحذير: هذا الإجراء لا يمكن التراجع عنه!</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف حسابك؟ سيؤدي هذا الإجراء إلى حذف جميع بياناتك الشخصية، طلبات توثيق الحساب، وحجوزات الرحلات المرتبطة برقم جوالك بشكل كامل ونهائي من النظام.
+            </p>
+
+            {deleteConfirmError && (
+              <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-950 p-3 rounded-xl">
+                {deleteConfirmError}
+              </div>
+            )}
+
+            <div className="flex justify-start gap-3">
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={handleClientDeleteAccount}
+                className="inline-flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-red-400 px-4 py-2.5 text-xs font-bold text-white shadow transition"
+              >
+                {deletingAccount ? 'جاري الحذف...' : 'نعم، احذف حسابي'}
+              </button>
+              <button
+                type="button"
+                disabled={deletingAccount}
+                onClick={() => {
+                  setShowDeleteConfirmModal(false)
+                  setDeleteConfirmError('')
+                }}
+                className="inline-flex items-center justify-center rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 disabled:opacity-50 px-4 py-2.5 text-xs font-bold text-neutral-700 dark:text-neutral-300 transition"
+              >
+                إلغاء
               </button>
             </div>
           </div>
