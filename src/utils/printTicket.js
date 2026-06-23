@@ -1,5 +1,6 @@
-export const openPrintWindow = (ticket) => {
+export const openPrintWindow = (tickets) => {
   if (typeof window === 'undefined') return
+  const ticketList = Array.isArray(tickets) ? tickets : [tickets]
   const printWindow = window.open('', '_blank', 'width=950,height=750')
   if (!printWindow) return
 
@@ -11,29 +12,115 @@ export const openPrintWindow = (ticket) => {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;')
 
-  const safeTicketNumber = escapeHtml(ticket.ticketNumber)
-  const safeCompany = escapeHtml(ticket.company)
-  const safePassengerName = escapeHtml(ticket.passengerName)
-  const safePhone = escapeHtml(ticket.phone)
-  const safePassport = escapeHtml(ticket.passport)
-  const safeTravelDate = escapeHtml(ticket.travelDate)
-  const safeOrigin = escapeHtml(ticket.origin)
-  const safeDestination = escapeHtml(ticket.destination)
-  const safeSeat = escapeHtml(ticket.seat)
-  const safeDob = escapeHtml(ticket.dob)
-  const safeTripTime = escapeHtml(ticket.tripTime)
-  const safeArrivalTime = escapeHtml(ticket.arrivalTime)
-  const safeDayOfWeek = escapeHtml(ticket.dayOfWeek)
-  const safeIssuingOffice = escapeHtml(ticket.issuingOffice)
-  const safePrice = escapeHtml(ticket.price)
-  const safeNotes = escapeHtml(ticket.notes)
-  const safeBusType = escapeHtml(ticket.busType)
+  let ticketHtmlBlocks = ''
+
+  ticketList.forEach((ticket, idx) => {
+    const safeTicketNumber = escapeHtml(ticket.ticketNumber)
+    const safeCompany = escapeHtml(ticket.company)
+    const safePassengerName = escapeHtml(ticket.passengerName)
+    const safePhone = escapeHtml(ticket.phone)
+    const safePassport = escapeHtml(ticket.passport)
+    const safeTravelDate = escapeHtml(ticket.travelDate)
+    const safeOrigin = escapeHtml(ticket.origin)
+    const safeDestination = escapeHtml(ticket.destination)
+    const safeSeat = escapeHtml(ticket.seat)
+    const safeDob = escapeHtml(ticket.dob)
+    const safeTripTime = escapeHtml(ticket.tripTime)
+    const safeArrivalTime = escapeHtml(ticket.arrivalTime)
+    const safeDayOfWeek = escapeHtml(ticket.dayOfWeek)
+    const safeIssuingOffice = escapeHtml(ticket.issuingOffice)
+    const safePrice = escapeHtml(ticket.price)
+    const safeNotes = escapeHtml(ticket.notes)
+    const safeBusType = escapeHtml(ticket.busType)
+
+    const pageBreak = idx < ticketList.length - 1 ? 'page-break-after: always;' : ''
+
+    ticketHtmlBlocks += `
+      <div class="ticket-wrapper" style="${pageBreak} margin-bottom: 20px;">
+        <div class="ticket-side">
+          <div class="logo-badge" style="margin-bottom: 20px;">
+            <img src="/logo.png" alt="Yemen Bus" style="max-width: 130px; height: auto; display: block; border-radius: 50%; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" />
+          </div>
+          
+          <div class="qr-code">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${safeTicketNumber}" alt="QR" />
+          </div>
+        </div>
+        
+        <div class="ticket-main">
+          <table class="ticket-table">
+            <tr>
+              <td class="lbl-col" style="width: 15%;">رقم التذكرة</td>
+              <td class="val-col val-col-highlight" style="width: 45%; font-size: 16px;">${safeTicketNumber}</td>
+              <td class="lbl-col" style="width: 15%;">رقم الجواز</td>
+              <td class="val-col" style="width: 25%;">${safePassport}</td>
+            </tr>
+            <tr>
+              <td class="lbl-col">الاسم</td>
+              <td class="val-col" style="font-size: 15px;">${safePassengerName}</td>
+              <td class="lbl-col">الرحلة</td>
+              <td class="val-col">${safeOrigin} - ${safeDestination}</td>
+            </tr>
+            <tr>
+              <td class="lbl-col">العمر/تاريخ الميلاد</td>
+              <td class="val-col">
+                <table style="width: 100%; border-collapse: collapse; margin: 0; padding: 0;">
+                  <tr>
+                    <td style="border: none; padding: 0; text-align: right; font-weight: bold; font-size: 15px;">${safeDob}</td>
+                    <td class="lbl-col" style="border: none; padding: 0 5px; background: transparent; width: auto; font-weight: bold;">المقعد</td>
+                    <td style="border: none; padding: 0; text-align: right; font-weight: bold; font-size: 16px; color: #dc2626;">${safeSeat}</td>
+                  </tr>
+                </table>
+              </td>
+              <td class="lbl-col">تاريخ الرحلة</td>
+              <td class="val-col">
+                <span>${safeTravelDate}</span>
+                <span style="margin: 0 8px; font-weight: normal; color: #4b5563;">|</span>
+                <span style="color: #dc2626;">${safeTripTime}</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="lbl-col">الإصدار</td>
+              <td class="val-col" style="font-size: 12px; font-weight: normal;">${new Date().toLocaleDateString('ar-EG')} ${new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</td>
+              <td class="lbl-col">وقت الحضور</td>
+              <td class="val-col">${safeArrivalTime}</td>
+            </tr>
+            <tr>
+              <td class="lbl-col">مكتب الاصدار</td>
+              <td class="val-col" style="font-size: 13px;">${safeCompany} | ${safeBusType} | ${safeIssuingOffice}</td>
+              <td class="lbl-col">اليوم</td>
+              <td class="val-col">${safeDayOfWeek}</td>
+            </tr>
+            <tr>
+              <td class="lbl-col">ملاحظات</td>
+              <td class="val-col" style="font-size: 13px;">${safeNotes}</td>
+              <td class="lbl-col">السعر</td>
+              <td class="val-col val-col-highlight" style="color: #dc2626; font-size: 17px;">${safePrice} YER</td>
+            </tr>
+          </table>
+          
+          <div class="rules-section">
+            <div class="rules-text">
+              - في حالة إلغاء التذكرة أو التخلف عن السفر تخصم كامل قيمة التذكرة مهما كانت الأسباب - إذا أردت تأجيل السفر يعلم المكتب قبل 12 ساعة من تاريخ السفر وتخصم 30%.
+            </div>
+            <div class="rules-text">
+              - الوزن المسموح للراكب المقيم 60 كيلو فقط والمعتمر 30 كيلو فقط. على المسافر متابعة عفشه عند التحميل وعند التنزيل والشركة غير مسؤولة عن الأمتعة التي بصحبة الراكب. كل من يتأخر عن موعد السفر فالمكتب غير مسؤول عنه ولا عن تعويضه.
+            </div>
+            
+            <div class="contacts-footer">
+              للتواصل: 01/606330 و 01/636998 و 01/284040
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+  })
 
   const html = `
     <html lang="ar" dir="rtl">
     <head>
       <meta charset="UTF-8" />
-      <title>طباعة التذكرة</title>
+      <title>طباعة التذاكر</title>
       <style>
         body { margin: 0; padding: 10px; font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; direction: rtl; background: #fff; color: #000; }
         .print-header { display: flex; justify-content: flex-end; margin-bottom: 15px; }
@@ -148,86 +235,10 @@ export const openPrintWindow = (ticket) => {
     </head>
     <body>
       <div class="print-header">
-        <button class="print-button" onclick="window.print()">طباعة التذكرة</button>
+        <button class="print-button" onclick="window.print()">طباعة التذاكر</button>
       </div>
       
-      <div class="ticket-wrapper">
-        <div class="ticket-side">
-          <div class="logo-badge" style="margin-bottom: 20px;">
-            <img src="/logo.png" alt="Yemen Bus" style="max-width: 130px; height: auto; display: block; border-radius: 50%; box-shadow: 0 4px 6px rgba(0,0,0,0.1);" />
-          </div>
-          
-          <div class="qr-code">
-            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${safeTicketNumber}" alt="QR" />
-          </div>
-        </div>
-        
-        <div class="ticket-main">
-          <table class="ticket-table">
-            <tr>
-              <td class="lbl-col" style="width: 15%;">رقم التذكرة</td>
-              <td class="val-col val-col-highlight" style="width: 45%; font-size: 16px;">${safeTicketNumber}</td>
-              <td class="lbl-col" style="width: 15%;">رقم الجواز</td>
-              <td class="val-col" style="width: 25%;">${safePassport}</td>
-            </tr>
-            <tr>
-              <td class="lbl-col">الاسم</td>
-              <td class="val-col" style="font-size: 15px;">${safePassengerName}</td>
-              <td class="lbl-col">الرحلة</td>
-              <td class="val-col">${safeOrigin} - ${safeDestination}</td>
-            </tr>
-            <tr>
-              <td class="lbl-col">العمر/تاريخ الميلاد</td>
-              <td class="val-col">
-                <table style="width: 100%; border-collapse: collapse; margin: 0; padding: 0;">
-                  <tr>
-                    <td style="border: none; padding: 0; text-align: right; font-weight: bold; font-size: 15px;">${safeDob}</td>
-                    <td class="lbl-col" style="border: none; padding: 0 5px; background: transparent; width: auto; font-weight: bold;">المقعد</td>
-                    <td style="border: none; padding: 0; text-align: right; font-weight: bold; font-size: 16px; color: #dc2626;">${safeSeat}</td>
-                  </tr>
-                </table>
-              </td>
-              <td class="lbl-col">تاريخ الرحلة</td>
-              <td class="val-col">
-                <span>${safeTravelDate}</span>
-                <span style="margin: 0 8px; font-weight: normal; color: #4b5563;">|</span>
-                <span style="color: #dc2626;">${safeTripTime}</span>
-              </td>
-            </tr>
-            <tr>
-              <td class="lbl-col">الإصدار</td>
-              <td class="val-col" style="font-size: 12px; font-weight: normal;">${new Date().toLocaleDateString('ar-EG')} ${new Date().toLocaleTimeString('ar-EG', {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</td>
-              <td class="lbl-col">وقت الحضور</td>
-              <td class="val-col">${safeArrivalTime}</td>
-            </tr>
-            <tr>
-              <td class="lbl-col">مكتب الاصدار</td>
-              <td class="val-col" style="font-size: 13px;">${safeCompany} | ${safeBusType} | ${safeIssuingOffice}</td>
-              <td class="lbl-col">اليوم</td>
-              <td class="val-col">${safeDayOfWeek}</td>
-            </tr>
-            <tr>
-              <td class="lbl-col">ملاحظات</td>
-              <td class="val-col" style="font-size: 13px;">${safeNotes}</td>
-              <td class="lbl-col">السعر</td>
-              <td class="val-col val-col-highlight" style="color: #dc2626; font-size: 17px;">${safePrice}</td>
-            </tr>
-          </table>
-          
-          <div class="rules-section">
-            <div class="rules-text">
-              - في حالة إلغاء التذكرة أو التخلف عن السفر تخصم كامل قيمة التذكرة مهما كانت الأسباب - إذا أردت تأجيل السفر يعلم المكتب قبل 12 ساعة من تاريخ السفر وتخصم 30%.
-            </div>
-            <div class="rules-text">
-              - الوزن المسموح للراكب المقيم 60 كيلو فقط والمعتمر 30 كيلو فقط. على المسافر متابعة عفشه عند التحميل وعند التنزيل والشركة غير مسؤولة عن الأمتعة التي بصحبة الراكب. كل من يتأخر عن موعد السفر فالمكتب غير مسؤول عنه ولا عن تعويضه.
-            </div>
-            
-            <div class="contacts-footer">
-              للتواصل: 01/606330 و 01/636998 و 01/284040
-            </div>
-          </div>
-        </div>
-      </div>
+      ${ticketHtmlBlocks}
     </body>
     </html>
   `

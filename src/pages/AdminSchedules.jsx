@@ -8,7 +8,8 @@ const AdminSchedules = () => {
   const [error, setError] = useState('')
   const [newDate, setNewDate] = useState('')
   const [company, setCompany] = useState('البركة')
-  const [price, setPrice] = useState(35000)
+  const [priceAdult, setPriceAdult] = useState(35000)
+  const [priceChild, setPriceChild] = useState(35050)
   const [busType, setBusType] = useState('VIP')
   const [totalSeats, setTotalSeats] = useState(40)
   const [tripTime, setTripTime] = useState('06:30:00 PM')
@@ -73,7 +74,8 @@ const AdminSchedules = () => {
         body: JSON.stringify({
           travelDate: newDate,
           company: company,
-          price: price,
+          priceAdult: priceAdult,
+          priceChild: priceChild,
           busType: busType,
           totalSeats: totalSeats,
           tripTime: tripTime,
@@ -146,8 +148,13 @@ const AdminSchedules = () => {
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-neutral-500">السعر</label>
-              <input type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} className="rounded-xl border px-4 py-2 w-28 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border-neutral-300 dark:border-neutral-700" />
+              <label className="text-xs text-neutral-500 font-sans">سعر البالغين</label>
+              <input type="number" min="0" value={priceAdult} onChange={(e) => setPriceAdult(Number(e.target.value))} className="rounded-xl border px-4 py-2 w-28 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border-neutral-300 dark:border-neutral-700 font-sans font-bold" />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-neutral-500 font-sans">سعر الأطفال</label>
+              <input type="number" min="0" value={priceChild} onChange={(e) => setPriceChild(Number(e.target.value))} className="rounded-xl border px-4 py-2 w-28 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 border-neutral-300 dark:border-neutral-700 font-sans font-bold" />
             </div>
 
             <div className="flex flex-col gap-1">
@@ -197,7 +204,9 @@ const AdminSchedules = () => {
                     <span className="mx-2 text-neutral-400">|</span>
                     <span className="text-sm text-neutral-600 dark:text-neutral-400">{d.busType}</span>
                     <span className="mx-2 text-neutral-400">|</span>
-                    <span className="text-sm font-bold text-green-600 dark:text-green-400">{d.price} ريال</span>
+                    <span className="text-xs text-neutral-500 font-sans">بالغين:</span> <span className="text-sm font-bold text-green-600 dark:text-green-400 font-sans">{d.priceAdult || d.price} YER</span>
+                    <span className="mx-2 text-neutral-400">|</span>
+                    <span className="text-xs text-neutral-500 font-sans">أطفال:</span> <span className="text-sm font-bold text-green-600 dark:text-green-400 font-sans">{d.priceChild || d.price} YER</span>
                     <span className="mx-2 text-neutral-400">|</span>
                     <span className="text-xs text-neutral-500">{d.totalSeats} مقعد</span>
                     <span className="mx-2 text-neutral-400">|</span>

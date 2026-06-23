@@ -185,6 +185,7 @@ class YemenBusServerTestCase(unittest.TestCase):
             )
             db.commit()
             
+        # ponytail: Make request
         response = self.client.get(
             "/api/bookings",
             headers={"Authorization": f"Bearer {token}"}
@@ -194,6 +195,239 @@ class YemenBusServerTestCase(unittest.TestCase):
         self.assertIn("bookings", res_json)
         self.assertIn("db_size", res_json)
         self.assertGreaterEqual(res_json["db_size"], 0)
+
+    def test_client_status_and_verification_workflow(self):
+        # 1. Status is unverified when no request exists
+        with self.client.session_transaction() as sess:
+            sess["client_phone"] = "770000001"
+            
+        # Add client user to database
+        with server.app.app_context():
+            db = server.get_db()
+            db.execute(
+                "INSERT OR REPLACE INTO client_users (phone, password_hash, created_at) VALUES (?, ?, ?)",
+                ("770000001", "some_hash", int(time.time()))
+            )
+            db.commit()
+            
+        res = self.client.get("/api/client/status")
+        self.assertEqual(res.status_code, 200)
+        status_data = res.get_json()
+        self.assertTrue(status_data["isLoggedIn"])
+        self.assertEqual(status_data["verificationStatus"], "unverified")
+
+        # 2. Submit verification request
+        import io
+        from PIL import Image as PILImage
+        img_byte_arr = io.BytesIO()
+        img = PILImage.new('RGB', (1, 1), color='blue')
+        img.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+
+        original_csrf = server.require_csrf_token
+        server.require_csrf_token = lambda: True
+
+        try:
+            data = {
+                "fullname": "ياسر الحميّقاني",
+                "identityType": "جواز سفر",
+                "identityNumber": "12356323",
+                "issueDate": "2026-06-23",
+                "issuePlace": "عدن",
+                "identityImage": (img_byte_arr, "identity.png"),
+            }
+            res = self.client.post(
+                "/api/client/verify",
+                data=data,
+                content_type="multipart/form-data"
+            )
+            self.assertEqual(res.status_code, 200)
+            res_json = res.get_json()
+            self.assertEqual(res_json["status"], "pending")
+
+            # 3. Check client status is now pending
+            res = self.client.get("/api/client/status")
+            self.assertEqual(res.get_json()["verificationStatus"], "pending")
+
+            # 4. Admin lists verifications
+            with server.app.app_context():
+                db = server.get_db()
+                token = "admin-verify-token"
+                db.execute(
+                    "INSERT INTO admin_tokens (token, username, role, created_at) VALUES (?, ?, ?, ?)",
+                    (token, "manager", "manager", int(time.time()))
+                )
+                db.commit()
+
+            res = self.client.get(
+                "/api/admin/verifications",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            self.assertEqual(res.status_code, 200)
+            ver_list = res.get_json()["verifications"]
+            self.assertEqual(len(ver_list), 1)
+            req_id = ver_list[0]["id"]
+            self.assertEqual(ver_list[0]["fullname"], "ياسر الحميّقاني")
+
+            # 5. Admin approves verification
+            res = self.client.post(
+                f"/api/admin/verifications/{req_id}/approve",
+                headers={"Authorization": f"Bearer {token}", "X-CSRF-Token": "dummy_csrf"} # require_csrf_token is mocked to True
+            )
+            self.assertEqual(res.status_code, 200)
+
+            # 6. Check status is now approved (verified)
+            res = self.client.get("/api/client/status")
+            self.assertEqual(res.get_json()["verificationStatus"], "approved")
+
+        finally:
+            server.require_csrf_token = original_csrf
+            # Clean up uploaded verification file
+            with server.app.app_context():
+                db = server.get_db()
+                row = db.execute("SELECT identity_image FROM verification_requests WHERE phone = '770000001'").fetchone()
+                if row:
+                    path = server.VERIFICATION_UPLOAD_DIR / row["identity_image"]
+                    if path.exists():
+                        try:
+                            path.unlink()
+                        except Exception:
+                            pass
+
+    def test_create_schedule_with_separate_pricing(self):
+        # Verify we can add a schedule with separate pricing for adults and children
+        with server.app.app_context():
+            db = server.get_db()
+            token = "admin-schedule-pricing-token"
+            db.execute(
+                "INSERT INTO admin_tokens (token, username, role, created_at) VALUES (?, ?, ?, ?)",
+                (token, "manager", "manager", int(time.time()))
+            )
+            db.commit()
+
+        original_csrf = server.require_csrf_token
+        server.require_csrf_token = lambda: True
+
+        try:
+            data = {
+                "travelDate": "2026-07-15",
+                "company": "البراق",
+                "priceAdult": 45000,
+                "priceChild": 30000,
+                "busType": "VIP",
+                "totalSeats": 30,
+                "tripTime": "09:00:00 PM",
+                "notes": "فرزة عدن",
+                "issuingOffice": "مكتب عدن"
+            }
+            res = self.client.post(
+                "/api/schedules",
+                json=data,
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            self.assertEqual(res.status_code, 201)
+            res_json = res.get_json()
+            self.assertEqual(res_json["schedule"]["priceAdult"], 45000)
+            self.assertEqual(res_json["schedule"]["priceChild"], 30000)
+
+            # Get schedules list
+            res_get = self.client.get("/api/schedules")
+            self.assertEqual(res_get.status_code, 200)
+            dates = res_get.get_json()["dates"]
+            inserted = [d for d in dates if d["travelDate"] == "2026-07-15" and d["company"] == "البراق"]
+            self.assertEqual(len(inserted), 1)
+            self.assertEqual(inserted[0]["priceAdult"], 45000)
+            self.assertEqual(inserted[0]["priceChild"], 30000)
+        finally:
+            server.require_csrf_token = original_csrf
+
+    def test_booking_with_passenger_type(self):
+        # Verify bookings get charged the correct price depending on passengerType
+        with server.app.app_context():
+            db = server.get_db()
+            db.execute(
+                "INSERT OR REPLACE INTO schedules (travel_date, company, price_adult, price_child, bus_type, total_seats, trip_time, notes, issuing_office) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ("2026-07-20", "إكسبرس", 50000, 35000, "VIP", 40, "06:30:00 PM", "الصعود من عفار", "مكتب وكيل")
+            )
+            db.commit()
+
+        original_csrf = server.require_csrf_token
+        server.require_csrf_token = lambda: True
+
+        booking_id_adult = None
+        booking_id_child = None
+        try:
+            import io
+            from PIL import Image as PILImage
+            img_byte_arr = io.BytesIO()
+            img = PILImage.new('RGB', (1, 1), color='yellow')
+            img.save(img_byte_arr, format='PNG')
+            img_byte_arr.seek(0)
+
+            # Book adult
+            data_adult = {
+                "passengerName": "مسافر بالغ",
+                "phone": "771111111",
+                "passport": "P12345678",
+                "travelDate": "2026-07-20",
+                "company": "إكسبرس",
+                "origin": "صنعاء",
+                "destination": "الرياض",
+                "seat": "10",
+                "dob": "1990",
+                "passengerType": "adult",
+                "passportImage": (io.BytesIO(img_byte_arr.getvalue()), "passport_adult.png"),
+            }
+            res_adult = self.client.post(
+                "/api/bookings",
+                data=data_adult,
+                content_type="multipart/form-data"
+            )
+            self.assertEqual(res_adult.status_code, 201)
+            booking_id_adult = res_adult.get_json()["ticketNumber"].split("-")[1]
+
+            # Book child
+            data_child = {
+                "passengerName": "مسافر طفل",
+                "phone": "771111111",
+                "passport": "C12345678",
+                "travelDate": "2026-07-20",
+                "company": "إكسبرس",
+                "origin": "صنعاء",
+                "destination": "الرياض",
+                "seat": "11",
+                "dob": "2018",
+                "passengerType": "child",
+                "passportImage": (io.BytesIO(img_byte_arr.getvalue()), "passport_child.png"),
+            }
+            res_child = self.client.post(
+                "/api/bookings",
+                data=data_child,
+                content_type="multipart/form-data"
+            )
+            self.assertEqual(res_child.status_code, 201)
+            booking_id_child = res_child.get_json()["ticketNumber"].split("-")[1]
+
+            # Assert database prices are correct
+            with server.app.app_context():
+                db = server.get_db()
+                row_adult = db.execute("SELECT price FROM bookings WHERE id = ?", (booking_id_adult,)).fetchone()
+                row_child = db.execute("SELECT price FROM bookings WHERE id = ?", (booking_id_child,)).fetchone()
+                
+                self.assertEqual(row_adult["price"], 50000)
+                self.assertEqual(row_child["price"], 35000)
+
+        finally:
+            server.require_csrf_token = original_csrf
+            # clean up files
+            for bid in [booking_id_adult, booking_id_child]:
+                if bid:
+                    path = server.UPLOAD_DIR / f"{bid}.png"
+                    if path.exists():
+                        try:
+                            path.unlink()
+                        except Exception:
+                            pass
 
 if __name__ == "__main__":
     unittest.main()

@@ -193,11 +193,3 @@ python -m unittest discover tests
 
 ---
 
-## 👤 Default Admin Credentials
-When database is initialized, the following default credentials are automatically populated:
-- **Manager Account (Full Admin access):**
-  - Username: `manager`
-  - Password: `admin123`
-- **Employee Account (Booking approval agent):**
-  - Username: `employee`
-  - Password: `employee123`

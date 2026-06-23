@@ -68,6 +68,9 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 PAYMENT_UPLOAD_DIR = BASE_DIR / "uploads" / "payments"
 PAYMENT_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+VERIFICATION_UPLOAD_DIR = BASE_DIR / "uploads" / "verifications"
+VERIFICATION_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def get_db():
     db = getattr(g, "_database", None)
@@ -117,6 +120,23 @@ def init_db():
             phone TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             created_at INTEGER NOT NULL
+        )
+        """
+    )
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS verification_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            phone TEXT UNIQUE NOT NULL,
+            fullname TEXT NOT NULL,
+            identity_type TEXT NOT NULL,
+            identity_number TEXT NOT NULL,
+            issue_date TEXT NOT NULL,
+            issue_place TEXT NOT NULL,
+            identity_image TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at INTEGER NOT NULL,
+            FOREIGN KEY(phone) REFERENCES client_users(phone)
         )
         """
     )
@@ -189,6 +209,8 @@ def init_db():
     schedules_cols = [row[1] for row in db.execute("PRAGMA table_info(schedules)").fetchall()]
     new_schedule_cols = {
         "price": "INTEGER NOT NULL DEFAULT 35000",
+        "price_adult": "INTEGER NOT NULL DEFAULT 35000",
+        "price_child": "INTEGER NOT NULL DEFAULT 35000",
         "bus_type": "TEXT NOT NULL DEFAULT 'VIP'",
         "total_seats": "INTEGER NOT NULL DEFAULT 40",
         "trip_time": "TEXT NOT NULL DEFAULT '06:30:00 PM'",
@@ -538,6 +560,107 @@ def client_logout():
     return jsonify({"message": "تم تسجيل الخروج بنجاح."}), 200
 
 
+@app.route("/api/client/status", methods=["GET"])
+def get_client_status():
+    phone = session.get("client_phone")
+    if not phone:
+        return jsonify({"isLoggedIn": False}), 200
+
+    db = get_db()
+    client = get_client_user(phone)
+    if not client:
+        return jsonify({"isLoggedIn": False}), 200
+
+    row = db.execute(
+        "SELECT status, fullname, identity_type, identity_number, issue_date, issue_place, identity_image FROM verification_requests WHERE phone = ?",
+        (phone,)
+    ).fetchone()
+
+    status = row["status"] if row else "unverified"
+    fullname = row["fullname"] if row else None
+    
+    return jsonify({
+        "isLoggedIn": True,
+        "phone": phone,
+        "verificationStatus": status,
+        "fullname": fullname,
+        "details": {
+            "fullname": row["fullname"],
+            "identityType": row["identity_type"],
+            "identityNumber": row["identity_number"],
+            "issueDate": row["issue_date"],
+            "issuePlace": row["issue_place"],
+            "identityImage": row["identity_image"],
+            "identityImageUrl": f"/uploads/verifications/{row['identity_image']}" if row else None
+        } if row else None
+    }), 200
+
+
+@app.route("/api/client/verify", methods=["POST"])
+def client_submit_verify():
+    phone = session.get("client_phone")
+    if not phone:
+        return jsonify({"message": "يرجى تسجيل الدخول أولاً."}), 401
+
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+
+    db = get_db()
+    existing = db.execute("SELECT status FROM verification_requests WHERE phone = ?", (phone,)).fetchone()
+    if existing:
+        if existing["status"] == "approved":
+            return jsonify({"message": "الحساب موثق بالفعل."}), 400
+        elif existing["status"] == "pending":
+            return jsonify({"message": "طلب التوثيق قيد المراجعة حالياً."}), 400
+
+    if not request.content_type or not request.content_type.startswith("multipart/form-data"):
+        return jsonify({"message": "Invalid request payload."}), 400
+
+    form = request.form
+    fullname = form.get("fullname")
+    identity_type = form.get("identityType")
+    identity_number = form.get("identityNumber")
+    issue_date = form.get("issueDate")
+    issue_place = form.get("issuePlace")
+    image_file = request.files.get("identityImage")
+
+    if not all([fullname, identity_type, identity_number, issue_date, issue_place, image_file]):
+        return jsonify({"message": "جميع الحقول مطلوبة."}), 400
+
+    fullname = fullname.strip()
+    identity_type = identity_type.strip()
+    identity_number = identity_number.strip()
+    issue_date = issue_date.strip()
+    issue_place = issue_place.strip()
+
+    if not allowed_image_filename(image_file.filename):
+        return jsonify({"message": "يُسمح فقط بصور بصيغة JPG أو PNG أو WEBP."}), 400
+
+    if not verify_image_magic(image_file):
+        return jsonify({"message": "ملف الصورة غير صالح أو تالف."}), 400
+
+    ext = image_file.filename.lower().split(".")[-1]
+    filename = f"verify_{phone}_{int(time.time())}.{ext}"
+    safe_name = secure_filename(filename)
+
+    try:
+        image_file.save(VERIFICATION_UPLOAD_DIR / safe_name)
+        db.execute(
+            """
+            INSERT OR REPLACE INTO verification_requests 
+            (phone, fullname, identity_type, identity_number, issue_date, issue_place, identity_image, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            """,
+            (phone, fullname, identity_type, identity_number, issue_date, issue_place, safe_name, int(time.time() * 1000))
+        )
+        db.commit()
+    except Exception as e:
+        logger.error("Error saving verification request: %s", str(e))
+        return jsonify({"message": "حدث خطأ أثناء حفظ طلب التوثيق. حاول مرة أخرى."}), 500
+
+    return jsonify({"message": "تم تقديم طلب التوثيق بنجاح وهو قيد المراجعة.", "status": "pending"}), 200
+
+
 @app.route("/api/bookings", methods=["POST"])
 def create_booking():
     client_ip = get_client_ip()
@@ -549,6 +672,7 @@ def create_booking():
 
     passport_image_file = None
     payment_image_file = None
+    passenger_type = "adult"
     if request.content_type and request.content_type.startswith("multipart/form-data"):
         form = request.form
         passport_image_file = request.files.get("passportImage")
@@ -568,6 +692,7 @@ def create_booking():
         issuing_office = form.get("issuingOffice")
         notes = form.get("notes")
         guest = form.get("guest", False)
+        passenger_type = form.get("passengerType", "adult")
     elif request.is_json:
         data = request.get_json()
         passenger_name = data.get("passengerName")
@@ -586,6 +711,7 @@ def create_booking():
         issuing_office = data.get("issuingOffice")
         notes = data.get("notes")
         guest = data.get("guest", False)
+        passenger_type = data.get("passengerType", "adult")
     else:
         return jsonify({"message": "Invalid request payload."}), 400
 
@@ -639,11 +765,18 @@ def create_booking():
     db = get_db()
     
     # Get schedule details
-    schedule = db.execute("SELECT id, price, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules WHERE travel_date = ? AND company = ?", (travel_date, company)).fetchone()
+    schedule = db.execute("SELECT id, price, price_adult, price_child, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules WHERE travel_date = ? AND company = ?", (travel_date, company)).fetchone()
     if not schedule:
         return jsonify({"message": "تاريخ المغادرة أو شركة النقل غير متاحة في الجدول."}), 400
 
-    price = schedule["price"]
+    # Determine price based on passenger type and database columns
+    price_adult = schedule["price_adult"] if "price_adult" in schedule.keys() else schedule["price"]
+    price_child = schedule["price_child"] if "price_child" in schedule.keys() else schedule["price"]
+    
+    if passenger_type == "child":
+        price = price_child
+    else:
+        price = price_adult
     bus_type = schedule["bus_type"]
     total_seats = schedule["total_seats"]
     trip_time = schedule["trip_time"]
@@ -818,6 +951,73 @@ def create_admin_user():
     return jsonify({"message": "تم إنشاء المستخدم بنجاح."}), 201
 
 
+@app.route("/api/admin/verifications", methods=["GET"])
+def list_verifications():
+    if not require_token():
+        return jsonify({"message": "Unauthorized."}), 401
+
+    db = get_db()
+    rows = db.execute("SELECT * FROM verification_requests ORDER BY created_at DESC").fetchall()
+    requests_list = []
+    for row in rows:
+        requests_list.append({
+            "id": row["id"],
+            "phone": row["phone"],
+            "fullname": row["fullname"],
+            "identityType": row["identity_type"],
+            "identityNumber": row["identity_number"],
+            "issueDate": row["issue_date"],
+            "issuePlace": row["issue_place"],
+            "identityImage": row["identity_image"],
+            "identityImageUrl": f"/uploads/verifications/{row['identity_image']}",
+            "status": row["status"],
+            "createdAt": row["created_at"]
+        })
+    return jsonify({"verifications": requests_list}), 200
+
+
+@app.route("/api/admin/verifications/<int:request_id>/approve", methods=["POST"])
+def approve_verification(request_id: int):
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"message": "Unauthorized."}), 401
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+    if current_user["role"] != "manager":
+        return jsonify({"message": "يجب أن يكون المدير للموافقة على توثيق الحساب."}), 403
+
+    db = get_db()
+    row = db.execute("SELECT phone FROM verification_requests WHERE id = ?", (request_id,)).fetchone()
+    if not row:
+        return jsonify({"message": "طلب التوثيق غير موجود."}), 404
+
+    db.execute("UPDATE verification_requests SET status = 'approved' WHERE id = ?", (request_id,))
+    db.commit()
+    logger.info("[ADMIN APPROVE] Verification request %d approved for client %s.", request_id, row["phone"])
+    return jsonify({"message": "تمت الموافقة على توثيق الحساب بنجاح."}), 200
+
+
+@app.route("/api/admin/verifications/<int:request_id>/reject", methods=["POST"])
+def reject_verification(request_id: int):
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"message": "Unauthorized."}), 401
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+    if current_user["role"] != "manager":
+        return jsonify({"message": "يجب أن يكون المدير لرفض توثيق الحساب."}), 403
+
+    db = get_db()
+    row = db.execute("SELECT phone FROM verification_requests WHERE id = ?", (request_id,)).fetchone()
+    if not row:
+        return jsonify({"message": "طلب التوثيق غير موجود."}), 404
+
+    db.execute("UPDATE verification_requests SET status = 'rejected' WHERE id = ?", (request_id,))
+    db.commit()
+    logger.info("[ADMIN REJECT] Verification request %d rejected for client %s.", request_id, row["phone"])
+    return jsonify({"message": "تم رفض طلب التوثيق."}), 200
+
+
 @app.route("/api/bookings", methods=["GET"])
 def get_bookings():
     if not require_token():
@@ -834,12 +1034,14 @@ def get_bookings():
 @app.route("/api/schedules", methods=["GET"])
 def get_schedules():
     db = get_db()
-    rows = db.execute("SELECT id, travel_date, company, price, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules ORDER BY travel_date ASC").fetchall()
+    rows = db.execute("SELECT id, travel_date, company, price, price_adult, price_child, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules ORDER BY travel_date ASC").fetchall()
     dates = [{
         "id": r["id"],
         "travelDate": r["travel_date"],
         "company": r["company"],
         "price": r["price"],
+        "priceAdult": r["price_adult"],
+        "priceChild": r["price_child"],
         "busType": r["bus_type"],
         "totalSeats": r["total_seats"],
         "tripTime": r["trip_time"],
@@ -891,6 +1093,28 @@ def serve_payment_image(filename: str):
 
     return abort(403)
 
+
+@app.route('/uploads/verifications/<path:filename>')
+def serve_verification_image(filename: str):
+    # ponytail: Secure access control. Only allow authenticated admins or the client who owns the request.
+    current_user = get_current_user()
+    if not current_user:
+        token = request.args.get("token")
+        if token:
+            current_user = verify_token(token)
+            
+    if current_user:
+        return send_from_directory(VERIFICATION_UPLOAD_DIR, filename)
+
+    phone = session.get("client_phone")
+    if phone:
+        db = get_db()
+        verify_req = db.execute("SELECT 1 FROM verification_requests WHERE phone = ? AND identity_image = ?", (phone, filename)).fetchone()
+        if verify_req:
+            return send_from_directory(VERIFICATION_UPLOAD_DIR, filename)
+
+    return abort(403)
+
 @app.route("/api/schedules", methods=["POST"])
 def create_schedule():
     # Require manager token
@@ -908,6 +1132,8 @@ def create_schedule():
     travel_date = data.get("travelDate")
     company = data.get("company")
     price = data.get("price", 35000)
+    price_adult = data.get("priceAdult", price)
+    price_child = data.get("priceChild", price)
     bus_type = data.get("busType", "VIP")
     total_seats = data.get("totalSeats", 40)
     trip_time = data.get("tripTime", "06:30:00 PM")
@@ -920,9 +1146,10 @@ def create_schedule():
         return jsonify({"message": "شركة النقل غير صالحة."}), 400
     
     try:
-        price = int(price)
+        price_adult = int(price_adult)
+        price_child = int(price_child)
         total_seats = int(total_seats)
-        if price <= 0 or total_seats <= 0:
+        if price_adult <= 0 or price_child <= 0 or total_seats <= 0:
             raise ValueError()
     except (ValueError, TypeError):
         return jsonify({"message": "السعر وعدد المقاعد يجب أن تكون أرقاماً موجبة."}), 400
@@ -945,12 +1172,12 @@ def create_schedule():
     db = get_db()
     try:
         cur = db.execute(
-            "INSERT OR IGNORE INTO schedules (travel_date, company, price, bus_type, total_seats, trip_time, notes, issuing_office) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (travel_date, company, price, bus_type, total_seats, trip_time, notes, issuing_office)
+            "INSERT OR IGNORE INTO schedules (travel_date, company, price, price_adult, price_child, bus_type, total_seats, trip_time, notes, issuing_office) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (travel_date, company, price_adult, price_adult, price_child, bus_type, total_seats, trip_time, notes, issuing_office)
         )
         db.commit()
         # fetch inserted id
-        row = db.execute("SELECT id, travel_date, company, price, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules WHERE travel_date = ? AND company = ?", (travel_date, company)).fetchone()
+        row = db.execute("SELECT id, travel_date, company, price, price_adult, price_child, bus_type, total_seats, trip_time, notes, issuing_office FROM schedules WHERE travel_date = ? AND company = ?", (travel_date, company)).fetchone()
     except Exception as e:
         return jsonify({"message": str(e)}), 500
     return jsonify({
@@ -960,6 +1187,8 @@ def create_schedule():
             "travelDate": row["travel_date"],
             "company": row["company"],
             "price": row["price"],
+            "priceAdult": row["price_adult"],
+            "priceChild": row["price_child"],
             "busType": row["bus_type"],
             "totalSeats": row["total_seats"],
             "tripTime": row["trip_time"],
