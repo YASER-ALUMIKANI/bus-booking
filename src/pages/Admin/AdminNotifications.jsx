@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getCsrfToken } from '../utils/csrf'
-import { openPrintWindow } from '../utils/printTicket'
+import { getCsrfToken } from '../../utils/csrf'
+import { openPrintWindow } from '../../utils/printTicket'
 
 const statusLabels = {
   pending: 'معلق',

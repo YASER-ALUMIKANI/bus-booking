@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCsrfToken } from '../utils/csrf'
+import { getCsrfToken } from '../../utils/csrf'
 
 const AdminSchedules = () => {
   const [dates, setDates] = useState([])

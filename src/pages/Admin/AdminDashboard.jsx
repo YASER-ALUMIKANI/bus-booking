@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getCsrfToken } from '../utils/csrf'
+import { getCsrfToken } from '../../utils/csrf'
 
 const AdminDashboard = () => {
   const [bookings, setBookings] = useState([])

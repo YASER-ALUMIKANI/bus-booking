@@ -5,10 +5,10 @@ import Home from './pages/Home';
 import About from './pages/About';
 import Bus from './pages/Bus';
 import Services from './pages/Services';
-import AdminLogin from './pages/AdminLogin';
-import AdminNotifications from './pages/AdminNotifications';
-import AdminDashboard from './pages/AdminDashboard';
-import AdminSchedules from './pages/AdminSchedules';
+import AdminLogin from './pages/Admin/AdminLogin';
+import AdminNotifications from './pages/Admin/AdminNotifications';
+import AdminDashboard from './pages/Admin/AdminDashboard';
+import AdminSchedules from './pages/Admin/AdminSchedules';
 
 function AppShell() {
   const location = useLocation();
