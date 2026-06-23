@@ -9,9 +9,63 @@ from pathlib import Path
 os.environ["SECRET_KEY"] = "test-secret-key"
 os.environ["ADMIN_MANAGER_PASSWORD"] = "testmanager123"
 
-# ponytail: Add parent directory to path so we can import server
+# ponytail: Add parent directory to path so we can import backend
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-import server
+from backend import app as backend_app
+from backend.database import db as backend_db
+from backend.services import auth_service as backend_auth
+from backend.services import booking_service as backend_booking
+
+from werkzeug.security import check_password_hash as check_pwd_hash
+
+class ServerCompat:
+    app = backend_app.app
+    BASE_DIR = backend_db.BASE_DIR
+    VERIFICATION_UPLOAD_DIR = backend_db.VERIFICATION_UPLOAD_DIR
+    UPLOAD_DIR = backend_db.UPLOAD_DIR
+    booking_request_log = backend_booking.booking_request_log
+
+    @property
+    def DB_FILE(self):
+        return backend_db.DB_FILE
+
+    @DB_FILE.setter
+    def DB_FILE(self, val):
+        backend_db.DB_FILE = val
+
+    @staticmethod
+    def init_db():
+        return backend_db.init_db()
+
+    @staticmethod
+    def get_db():
+        return backend_db.get_db()
+
+    @staticmethod
+    def get_admin_user(username):
+        return backend_auth.get_admin_user(username)
+
+    @staticmethod
+    def verify_token(token):
+        return backend_auth.verify_token(token)
+
+    @staticmethod
+    def is_rate_limited(ip):
+        return backend_booking.is_rate_limited(ip)
+
+    @staticmethod
+    def check_password_hash(p_hash, password):
+        return check_pwd_hash(p_hash, password)
+
+    @property
+    def require_csrf_token(self):
+        return backend_db._csrf_override if backend_db._csrf_override is not None else backend_db.require_csrf_token
+
+    @require_csrf_token.setter
+    def require_csrf_token(self, val):
+        backend_db._csrf_override = val
+
+server = ServerCompat()
 
 class YemenBusServerTestCase(unittest.TestCase):
     def setUp(self):

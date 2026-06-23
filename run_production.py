@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 from waitress import serve
-from server import app
+from backend.app import app
 
 # ponytail: Production runner for Waitress. Uses native WSGI serving.
 if __name__ == "__main__":
