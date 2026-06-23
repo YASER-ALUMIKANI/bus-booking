@@ -21,3 +21,20 @@ yarn-error.log*
 # IDE/editor files
 .vscode/
 .DS_Store
+
+.agent-context.md
+.agent
+
+# SQLite databases & temp files
+app.db
+app.db-journal
+app.db-wal
+test_app.db
+test_app.db-journal
+test_app.db-wal
+
+# Passenger uploads (documents & payment receipts)
+uploads/
+
+# Temporary files
+public/*.code-search

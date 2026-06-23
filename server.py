@@ -35,7 +35,6 @@ DEFAULT_ADMIN_USERS = {
     "manager": {"password": "admin123", "role": "manager"},
     "employee": {"password": "employee123", "role": "employee"},
 }
-TOKENS = {}
 
 VALID_STATUSES = {"pending", "confirmed", "cancelled"}
 VALID_COMPANIES = {"البركة", "المتصدر", "البراق", "إكسبرس"}
@@ -66,12 +65,17 @@ IMAGE_MAGIC: dict[str, list[tuple[int, bytes]]] = {
 UPLOAD_DIR = BASE_DIR / "uploads" / "passports"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+PAYMENT_UPLOAD_DIR = BASE_DIR / "uploads" / "payments"
+PAYMENT_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def get_db():
     db = getattr(g, "_database", None)
     if db is None:
         db = sqlite3.connect(DB_FILE, check_same_thread=False)
         db.row_factory = sqlite3.Row
+        # ponytail: Enable WAL mode for high concurrency
+        db.execute("PRAGMA journal_mode=WAL;")
         g._database = db
     return db
 
@@ -95,6 +99,17 @@ def init_db():
         )
         """
     )
+    # ponytail: Keep admin tokens persistent across restarts using sqlite database
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS admin_tokens (
+            token TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            role TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        )
+        """
+    )
     db.execute(
         """
         CREATE TABLE IF NOT EXISTS client_users (
@@ -105,12 +120,18 @@ def init_db():
         )
         """
     )
+    # ponytail: Load default admin passwords from env vars for production security
     for username, entry in DEFAULT_ADMIN_USERS.items():
         row = db.execute("SELECT 1 FROM admin_users WHERE username = ?", (username,)).fetchone()
         if row is None:
+            env_pass_key = f"ADMIN_{username.upper()}_PASSWORD"
+            password = os.environ.get(env_pass_key)
+            if not password:
+                password = entry["password"]
+                logger.warning("SECURITY WARNING: Using default hardcoded password for %s. Set %s env variable in production.", username, env_pass_key)
             db.execute(
                 "INSERT INTO admin_users (username, password_hash, role) VALUES (?, ?, ?)",
-                (username, generate_password_hash(entry["password"]), entry["role"]),
+                (username, generate_password_hash(password), entry["role"]),
             )
 
     db.execute(
@@ -197,7 +218,9 @@ def init_db():
         "issuing_office": "TEXT",
         "price": "INTEGER",
         "notes": "TEXT",
-        "bus_type": "TEXT"
+        "bus_type": "TEXT",
+        "payment_ref": "TEXT",
+        "payment_image": "TEXT"
     }
     for col_name, col_type in new_booking_cols.items():
         if col_name not in columns:
@@ -238,6 +261,9 @@ def row_to_booking(row):
         "price": row["price"] if "price" in keys else None,
         "notes": row["notes"] if "notes" in keys else None,
         "bus_type": row["bus_type"] if "bus_type" in keys else None,
+        "payment_ref": row["payment_ref"] if "payment_ref" in keys else None,
+        "payment_image": row["payment_image"] if "payment_image" in keys else None,
+        "payment_image_url": f"/uploads/payments/{row['payment_image']}" if ("payment_image" in keys and row["payment_image"]) else None,
     }
 
 
@@ -261,6 +287,14 @@ def get_client_ip():
 def is_rate_limited(ip):
     now = int(time.time())
     window_start = now - BOOKING_RATE_WINDOW_SECONDS
+    
+    # ponytail: Prune expired entries to prevent RAM growth (memory leak) in production
+    if len(booking_request_log) > 1000:
+        for k in list(booking_request_log.keys()):
+            booking_request_log[k] = [t for t in booking_request_log[k] if t >= window_start]
+            if not booking_request_log[k]:
+                booking_request_log.pop(k, None)
+
     request_times = booking_request_log.get(ip, [])
     request_times = [t for t in request_times if t >= window_start]
     if len(request_times) >= BOOKING_RATE_LIMIT:
@@ -271,13 +305,27 @@ def is_rate_limited(ip):
     return False
 
 
+def verify_token(token: str):
+    # ponytail: Verify token and check for 7-day expiration
+    if not token:
+        return None
+    db = get_db()
+    row = db.execute("SELECT username, role, created_at FROM admin_tokens WHERE token = ?", (token,)).fetchone()
+    if not row:
+        return None
+    if int(time.time()) - row["created_at"] > 7 * 24 * 3600:
+        db.execute("DELETE FROM admin_tokens WHERE token = ?", (token,))
+        db.commit()
+        return None
+    return {"username": row["username"], "role": row["role"]}
+
+
 def get_current_user():
     auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        return None
-
-    token = auth_header.split("Bearer ")[1]
-    return TOKENS.get(token)
+    if auth_header.startswith("Bearer "):
+        token = auth_header.split("Bearer ")[1]
+        return verify_token(token)
+    return None
 
 
 def require_token():
@@ -500,9 +548,11 @@ def create_booking():
         return jsonify({"message": "CSRF token missing or invalid."}), 403
 
     passport_image_file = None
+    payment_image_file = None
     if request.content_type and request.content_type.startswith("multipart/form-data"):
         form = request.form
         passport_image_file = request.files.get("passportImage")
+        payment_image_file = request.files.get("paymentImage")
         passenger_name = form.get("passengerName")
         phone = form.get("phone")
         passport = form.get("passport")
@@ -512,6 +562,7 @@ def create_booking():
         company = form.get("company")
         seat = form.get("seat")
         dob = form.get("dob")
+        payment_ref = form.get("paymentRef")
         trip_time = form.get("tripTime")
         arrival_time = form.get("arrivalTime")
         issuing_office = form.get("issuingOffice")
@@ -528,6 +579,8 @@ def create_booking():
         company = data.get("company")
         seat = data.get("seat")
         dob = data.get("dob")
+        payment_ref = data.get("paymentRef")
+        payment_image = data.get("paymentImage")
         trip_time = data.get("tripTime")
         arrival_time = data.get("arrivalTime")
         issuing_office = data.get("issuingOffice")
@@ -574,6 +627,15 @@ def create_booking():
     if not verify_image_magic(passport_image_file):
         return jsonify({"message": "الملف المرفوع ليس صورة حقيقية. يُسمح فقط بصور JPG أو PNG أو WEBP."}), 400
 
+    # ponytail: Validate payment reference and image optionally in production
+    payment_ref = payment_ref.strip() if payment_ref else None
+
+    if payment_image_file:
+        if not allowed_image_filename(payment_image_file.filename):
+            return jsonify({"message": "صيغة صورة إشعار الحوالة غير مدعومة. استخدم JPG أو PNG أو WEBP."}), 400
+        if not verify_image_magic(payment_image_file):
+            return jsonify({"message": "الملف المرفوع كإشعار تحويل ليس صورة حقيقية. يُسمح فقط بصور JPG أو PNG أو WEBP."}), 400
+
     db = get_db()
     
     # Get schedule details
@@ -612,10 +674,19 @@ def create_booking():
     passport_image_filename = f"{booking_id}.{extension}"
     passport_image_path = UPLOAD_DIR / passport_image_filename
     passport_image_file.save(passport_image_path)
+
+    # ponytail: Save payment image receipt securely in production if provided
+    payment_image_filename = None
+    if payment_image_file:
+        payment_filename = secure_filename(payment_image_file.filename)
+        payment_extension = payment_filename.rsplit('.', 1)[1].lower() if '.' in payment_filename else 'jpg'
+        payment_image_filename = f"{booking_id}_payment.{payment_extension}"
+        payment_image_path = PAYMENT_UPLOAD_DIR / payment_image_filename
+        payment_image_file.save(payment_image_path)
     
     db.execute(
-        "INSERT INTO bookings (id, passenger_name, phone, passport, passport_image, travel_date, origin, destination, status, requested_status, cancellation_reason, requested_cancellation_reason, locked, change_requested, approval_granted, guest, timestamp, company, seat, dob, trip_time, arrival_time, day_of_week, issuing_office, price, notes, bus_type)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO bookings (id, passenger_name, phone, passport, passport_image, travel_date, origin, destination, status, requested_status, cancellation_reason, requested_cancellation_reason, locked, change_requested, approval_granted, guest, timestamp, company, seat, dob, trip_time, arrival_time, day_of_week, issuing_office, price, notes, bus_type, payment_ref, payment_image)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             booking_id,
             passenger_name,
@@ -644,6 +715,8 @@ def create_booking():
             price,
             notes,
             bus_type,
+            payment_ref,
+            payment_image_filename
         ),
     )
     db.commit()
@@ -688,7 +761,12 @@ def admin_login():
         return jsonify({"message": "اسم المستخدم أو كلمة المرور غير صحيحة."}), 401
 
     token = secrets.token_hex(16)
-    TOKENS[token] = {"username": username, "role": row["role"]}
+    db = get_db()
+    db.execute(
+        "INSERT INTO admin_tokens (token, username, role, created_at) VALUES (?, ?, ?, ?)",
+        (token, username, row["role"], int(time.time()))
+    )
+    db.commit()
     return jsonify({"token": token, "role": row["role"], "username": username}), 200
 
 
@@ -748,7 +826,10 @@ def get_bookings():
     db = get_db()
     rows = db.execute("SELECT * FROM bookings ORDER BY timestamp DESC").fetchall()
     bookings = [row_to_booking(row) for row in rows]
-    return jsonify({"bookings": bookings}), 200
+    
+    # ponytail: Return sqlite database file size dynamically for system metrics
+    db_size_bytes = DB_FILE.stat().st_size if DB_FILE.exists() else 0
+    return jsonify({"bookings": bookings, "db_size": db_size_bytes}), 200
 
 @app.route("/api/schedules", methods=["GET"])
 def get_schedules():
@@ -769,7 +850,46 @@ def get_schedules():
 
 @app.route('/uploads/passports/<path:filename>')
 def serve_passport_image(filename: str):
-    return send_from_directory(UPLOAD_DIR, filename)
+    # ponytail: Secure access control. Only allow authenticated admins or the client who owns the booking.
+    current_user = get_current_user()
+    if not current_user:
+        token = request.args.get("token")
+        if token:
+            current_user = verify_token(token)
+            
+    if current_user:
+        return send_from_directory(UPLOAD_DIR, filename)
+
+    phone = session.get("client_phone")
+    if phone:
+        db = get_db()
+        booking = db.execute("SELECT 1 FROM bookings WHERE phone = ? AND passport_image = ?", (phone, filename)).fetchone()
+        if booking:
+            return send_from_directory(UPLOAD_DIR, filename)
+
+    return abort(403)
+
+
+@app.route('/uploads/payments/<path:filename>')
+def serve_payment_image(filename: str):
+    # ponytail: Secure access control. Only allow authenticated admins or the client who owns the booking.
+    current_user = get_current_user()
+    if not current_user:
+        token = request.args.get("token")
+        if token:
+            current_user = verify_token(token)
+            
+    if current_user:
+        return send_from_directory(PAYMENT_UPLOAD_DIR, filename)
+
+    phone = session.get("client_phone")
+    if phone:
+        db = get_db()
+        booking = db.execute("SELECT 1 FROM bookings WHERE phone = ? AND payment_image = ?", (phone, filename)).fetchone()
+        if booking:
+            return send_from_directory(PAYMENT_UPLOAD_DIR, filename)
+
+    return abort(403)
 
 @app.route("/api/schedules", methods=["POST"])
 def create_schedule():

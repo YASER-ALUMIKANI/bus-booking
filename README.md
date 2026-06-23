@@ -1,136 +1,203 @@
+# YemenBus - نظام حجز تذاكر الحافلات اليمني المتقدم
+YemenBus هو نظام ويب متكامل ومخصص لإدارة وحجز تذاكر حافلات النقل الجماعي في اليمن، مصمم لتسهيل عملية الحجز للركاب وتوفير لوحة تحكم شاملة واحترافية للمسؤولين والمدراء لإدارة الحجوزات والموظفين بأعلى مستويات الأمان والسرعة.
 
-# Online Bus Ticket Booking System (starter template)
+---
 
-This is just a starter template containing Navbar, Footer, and Theme Switcher Section. And also installed the required resources like react icons, framer motion, and other basic requirements.
+## 🌟 الميزات الرئيسية (Key Features)
 
+### 🧑‍💼 للركاب (Passenger Experience)
+- **حجز مقاعد تفاعلي**: واجهة مستخدم رسومية لاختيار المقاعد وحساب الأسعار بشكل حي ومقرار بناءً على الرحلة والشركة المختارة.
+- **إرفاق الوثائق الرسمية**: رفع صورة جواز السفر بطريقة آمنة مع التحقق التلقائي من صحة الصور المرفوعة وصيغتها لمنع الثغرات الأمنية.
+- **خيارات الدفع بالتحويل المالي (اختياري)**: إدخال رقم الحوالة المالية المرجعي وإرفاق صورة إشعار التحويل لتسهيل وتأكيد الحجز.
 
+### 💼 للموظفين والتحقق (Employee Portal)
+- **صفحة الإشعارات المباشرة (`/admin`)**: مخصصة للموظفين لتلقي طلبات الحجز المعلقة والتحقق منها وتأكيدها أو إلغائها مع كتابة مبررات الإلغاء.
+- **الطباعة الفورية للتذاكر**: إمكانية طباعة تذاكر الركاب المؤكدة بضغطة زر واحدة بشكل منسق واحترافي.
+- **طلب تغيير حالة الحجز**: خيار طلب إلغاء أو تغيير الحجوزات المؤكدة مع إخضاعها للموافقة الأمنية بكلمة مرور المدير.
 
-## Installation
+### 👑 للمدراء ولوحة التحكم المتقدمة (`/admin/dashboard`)
+- **لوحة تحكم بنظام cPanel (cPanel-Style Dashboard)**: لوحة تحكم تماثل واجهات الاستضافة الاحترافية (قوائم جانبية مبوبة، أدوات منظمة، لوحة إحصائيات حية، ومعلومات عامة للنظام).
+- **أمان وعزل كامل للصلاحيات**:
+  - حصر لوحة التحكم بالكامل لمدير النظام (`manager`).
+  - عزل حسابات الموظفين (`employee`) ومنعهم تماماً من رؤية أو دخول لوحة التحكم مع توجيههم تلقائياً لصفحة الإشعارات عند محاولة الدخول.
+  - إخفاء روابط لوحة التحكم من حسابات الموظفين تماماً.
+- **مستعرض تفاعلي لقاعدة البيانات**: استعراض الحجوزات بالكامل مع ميزات البحث السريع والفرز المتقدم حسب تواريخ السفر وحالات الطلب.
+- **تصدير كشوفات Excel**: إمكانية تنزيل نسخة احتياطية لكافة الحجوزات بصيغة CSV المتوافقة تماماً مع Excel بضغطة زر.
+- **طباعة البيان (Manifest)**: طباعة كشف ركاب الرحلة (البيان) بشكل منسق ومبوب تلقائياً بناءً على تاريخ السفر، بحيث يتم طباعة كشف كل تاريخ في صفحة منفصلة تلقائياً.
+- **إدارة المشرفين**: إضافة حسابات مسؤولين جدد وتحديد أدوارهم وصلاحياتهم (مدير أو موظف).
 
-Install with npm
+---
 
-Clone the project
+## 🛠️ البنية التقنية (Tech Stack)
 
+### الواجهة الأمامية (Frontend)
+- **React.js + Vite**: لبناء واجهة سريعة الاستجابة وذات كفاءة عالية.
+- **TailwindCSS**: للتصميم التفاعلي والعصري والألوان المتناسقة.
+- **Framer Motion**: للمؤثرات البصرية والانتقالات السلسة.
+
+### الواجهة الخلفية وقاعدة البيانات (Backend & Database)
+- **Flask (Python)**: لتوفير خدمات الويب والـ API بطريقة مرنة وسريعة.
+- **SQLite (WAL Mode)**: قاعدة بيانات محلية سريعة وموثوقة، تم تفعيل وضع **Write-Ahead Logging (WAL)** لضمان معالجة متزامنة عالية الحجم وتجنب قفل قاعدة البيانات عند ضغط العمليات.
+- **Waitress WSGI Server**: خادم الإنتاج الأساسي لتشغيل التطبيق بكفاءة لتحمل مئات الطلبات اليومية بأمان تام.
+- **نظام الحماية والأمان**:
+  - حماية صارمة ضد هجمات **CSRF** و**XSS**.
+  - التحقق من صحة الملفات المرفوعة عبر **Magic Bytes** لمنع هجمات رفع الملفات الخبيثة.
+  - التشفير الآمن لكلمات المرور باستخدام **SHA-256 (pbkdf2:sha256)**.
+  - إدارة الجلسات ورموز الوصول (Tokens) المنتهية تلقائياً بعد 7 أيام والمخزنة في قاعدة البيانات.
+
+---
+
+## 🚀 التشغيل والتثبيت (Installation & Running)
+
+### المتطلبات المسبقة
+- تثبيت بايثون إصدار 3.8 أو أعلى.
+- تثبيت Node.js و npm.
+
+### 1. تثبيت الاعتمادات (Install Dependencies)
+
+قم بتثبيت مكتبات بايثون:
 ```bash
-  git clone https://github.com/gtech-official08/bus-ticket-booking-setup.git
+pip install -r requirements.txt
 ```
 
-Remove `.git` an `README.md` if you want to push this repo on your github.com.
-
-Go to the project directory
-
+قم بتثبيت اعتمادات الواجهة الأمامية:
 ```bash
-  cd my-project
-```
-
-Install dependencies
-
-``` bash
 npm install
 ```
-OR 
 
+### 2. بناء الواجهة الأمامية (Build Frontend)
+لبناء ملفات الإنتاج النهائية المضغوطة:
 ```bash
-npm i
+npm run build
 ```
+سيقوم Vite بإنشاء مجلد `dist` يحتوي على الأصول والملفات الجاهزة للنشر والتخديم عبر Flask.
 
-Start the server
-
-``` bash
-npm run dev
-```
-
-If you want to see live project on your mobile or other local machine with same wifi connection.
-
+### 3. تشغيل خادم الإنتاج (Run Production Server)
+لتشغيل النظام في بيئة إنتاجية جاهزة للعمل الحقيقي واستقبال مئات الطلبات عبر خادم **Waitress**:
 ```bash
-npm run dev -- --host
+python run_production.py
+```
+سيبدأ الخادم بالعمل على الرابط المباشر: `http://localhost:5000`
+
+---
+
+## 🧪 نظام الاختبارات (Testing)
+تم بناء اختبارات آلية شاملة تغطي التحقق من وضع WAL، حماية المجلدات، تشفير كلمات المرور، وسلامة تدفق الحجوزات بدون إرفاق الحوالات المالية. 
+لتشغيل الاختبارات:
+```bash
+python -m unittest discover tests
 ```
 
+---
 
-## Usages
+## 👤 حسابات المسؤولين الافتراضية
+عند تشغيل النظام لأول مرة، يتم تلقائياً إنشاء الحسابات التجريبية التالية في قاعدة البيانات:
+- **حساب المدير (مدير النظام بكامل الصلاحيات):**
+  - اسم المستخدم: `manager`
+  - كلمة المرور: `admin123`
+- **حساب الموظف (موظف موافق تذاكر):**
+  - اسم المستخدم: `employee`
+  - كلمة المرور: `employee123`
 
-Don't forgot to insert this code on `tailwind.config.js`
+---
+---
 
-```javascript
-/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-  darkMode: "class",
-}
+# YemenBus - Advanced Bus Ticket Booking System
+
+YemenBus is a complete web application designed for booking and managing group transit bus tickets in Yemen. It is built to offer a seamless booking experience for passengers and a robust, secure cPanel-style management interface for admins and employees to manage bookings and server resources with high security and speed.
+
+---
+
+## 🌟 Key Features
+
+### 🧑‍💼 Passenger Experience
+- **Interactive Seat Selection**: A responsive visual interface to choose seats and dynamically calculate ticket prices based on the selected trip, city, and bus company.
+- **Passport Document Upload**: Safe passport photo uploads with backend validation using magic bytes verification to prevent malicious file uploads.
+- **Optional Payment Reference & Image**: Passengers can optionally enter transaction reference numbers and upload payment receipt images to request ticket confirmation.
+
+### 💼 Employee Portal
+- **Real-Time Notification Panel (`/admin`)**: A dedicated view for validation agents (employees) to receive booking requests and easily confirm or cancel them (with cancellation reason).
+- **Instant Ticket Printing**: Instantly print tickets with a clean, printer-friendly layout for passengers.
+- **Change Request System**: Employees can request ticket status changes, which are protected and require a manager's override password.
+
+### 👑 Manager & Administration cPanel (`/admin/dashboard`)
+- **cPanel-Style Dashboard**: A premium, hosting-style administration panel with tabbed navigation, categorised tools, server telemetry details, and real-time statistics.
+- **Role-Based Access Control (RBAC) & Redirects**:
+  - The cPanel dashboard is strictly limited to the `manager` role.
+  - Normal employees (`employee`) are automatically blocked and redirected to `/admin` if they attempt to navigate to `/admin/dashboard` manually.
+  - All control panel access links are hidden from non-manager views.
+- **Interactive Database Explorer**: Easily search, view, and filter passenger details by travel dates, statuses, and routes.
+- **Excel Export**: Export the entire database or filtered views to CSV format with a single click.
+- **Manifest Printing**: Print travel manifests automatically grouped by travel date. If "All Dates" is selected, it inserts automatic page breaks (`page-break-after: always`) to print a separate manifest page for each date.
+- **Admin Management**: Add new administrators and assign them roles (`manager` or `employee`).
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+- **React.js + Vite**: For quick page loads and smooth user interactions.
+- **TailwindCSS**: Premium responsive styling with uniform colors.
+- **Framer Motion**: Smooth micro-animations and page transitions.
+
+### Backend & Database
+- **Flask (Python)**: Light and robust backend APIs.
+- **SQLite (WAL Mode)**: Relational local database using Write-Ahead Logging (WAL) mode to support concurrent writes and prevent locking.
+- **Waitress WSGI Server**: Multi-threaded production WSGI server capable of handling hundreds of requests daily.
+- **Security Protocols**:
+  - CSRF protection enabled.
+  - File upload sanitization checking magic bytes headers.
+  - Secure pbkdf2 password hashing (SHA-256).
+  - Session tokens stored in database with a 7-day expiration.
+
+---
+
+## 🚀 Installation & Running
+
+### Prerequisites
+- Python 3.8 or higher.
+- Node.js and npm installed.
+
+### 1. Install Dependencies
+Install Python requirements:
+```bash
+pip install -r requirements.txt
 ```
 
-To Enable `Dark & Light Mode` in the system.
+Install frontend packages:
+```bash
+npm install
+```
 
+### 2. Build Frontend
+Build production-ready compiled assets:
+```bash
+npm run build
+```
+Vite will compile files into the `dist` directory.
 
-## Features
+### 3. Run Production Server
+To launch using the multi-threaded production WSGI server (Waitress):
+```bash
+python run_production.py
+```
+Open `http://localhost:5000` in your browser.
 
-- Light/dark mode toggle
-- Live Seat booking
-- Live Price Calculate
-- Animation (framer motion)
+---
 
+## 🧪 Testing
+The backend test suite verifies SQLite WAL mode, security parameters, and ticket workflow logic. Run them using:
+```bash
+python -m unittest discover tests
+```
 
-## Tech Stack
+---
 
-**Client:** ReactJs, ViteJs, TailwindCSS
-
-
-## Screenshots
-
-![Screenshot_12-6-2024_113311_localhost](https://github.com/gtech-official08/bus-ticket-booking-setup/assets/127587520/b16296ca-cdf0-4ee0-860b-5db4ab440c72)
-
-
-![Screenshot_12-6-2024_113619_localhost](https://github.com/gtech-official08/bus-ticket-booking-setup/assets/127587520/69afb87e-6b6d-4734-b1fb-06c70af0deb7)
-
-
-![Screenshot_12-6-2024_113547_localhost](https://github.com/gtech-official08/bus-ticket-booking-setup/assets/127587520/abebeab0-11a1-41b3-a984-4c67a07195af)
-
-
-![Screenshot_12-6-2024_113415_localhost](https://github.com/gtech-official08/bus-ticket-booking-setup/assets/127587520/b999fbc4-60dd-4cc5-8c3f-936548533c75)
-
-
-![Screenshot_12-6-2024_113520_localhost](https://github.com/gtech-official08/bus-ticket-booking-setup/assets/127587520/6c45cfa5-55cb-4d8d-8dc8-f44772fd17b4)
-
-
-![Screenshot_12-6-2024_113430_localhost](https://github.com/gtech-official08/bus-ticket-booking-setup/assets/127587520/d42269bf-2611-4995-9879-3b5954a89e25)
-
-
-
-## See Demo
-
-Live Demo:- 
-
-
-### Full Video Tutorial
-Video Link:- https://www.youtube.com/watch?v=1Guddi2MbOM 
-
-
-## Author
-
-- [@gtechofficial08](https://github.com/gtech-official08)
-
-
-## Acknowledgements
-
- - [Awesome Readme Templates Generator](https://readme.so/)
-
-
-## Support
-
-For support, email gtech.official08@gmail.com or DM us on Instagram.
-
-
-## Appendix
-
-Don't Forgot to Subscribe, Like, Comment, & Share.
-
-
-
-
+## 👤 Default Admin Credentials
+When database is initialized, the following default credentials are automatically populated:
+- **Manager Account (Full Admin access):**
+  - Username: `manager`
+  - Password: `admin123`
+- **Employee Account (Booking approval agent):**
+  - Username: `employee`
+  - Password: `employee123`

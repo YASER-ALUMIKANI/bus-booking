@@ -26,6 +26,7 @@ const AdminNotifications = () => {
   const [csrfToken, setCsrfToken] = useState('')
   const [zoomedPassportUrl, setZoomedPassportUrl] = useState('')
   const [selectedDate, setSelectedDate] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const navigate = useNavigate()
 
   const getToken = () => localStorage.getItem('adminToken')
@@ -202,11 +203,11 @@ const AdminNotifications = () => {
     }
   }
 
-  const visibleBookings = selectedDate
+  const dateFilteredBookings = selectedDate
     ? bookings.filter((booking) => booking.travel_date === selectedDate)
     : bookings
 
-  const bookingCounts = visibleBookings.reduce(
+  const bookingCounts = dateFilteredBookings.reduce(
     (acc, booking) => {
       if (booking.status === 'confirmed') acc.confirmed += 1
       else if (booking.status === 'cancelled') acc.cancelled += 1
@@ -215,6 +216,10 @@ const AdminNotifications = () => {
     },
     { confirmed: 0, cancelled: 0, pending: 0 }
   )
+
+  const visibleBookings = dateFilteredBookings.filter((booking) => {
+    return statusFilter === 'all' || booking.status === statusFilter
+  })
 
   return (
     <main className="pt-[8ch] min-h-[calc(100vh-8ch)] bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100">
@@ -227,12 +232,14 @@ const AdminNotifications = () => {
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
-            <Link
-              to="/admin/dashboard"
-              className="inline-flex items-center justify-center rounded-full border border-violet-600 bg-white px-6 py-3 text-violet-600 font-semibold hover:bg-violet-50 transition"
-            >
-              افتح لوحة التحكم
-            </Link>
+            {role === 'manager' && (
+              <Link
+                to="/admin/dashboard"
+                className="inline-flex items-center justify-center rounded-full border border-violet-600 bg-white px-6 py-3 text-violet-600 font-semibold hover:bg-violet-50 transition"
+              >
+                افتح لوحة التحكم
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="inline-flex items-center justify-center rounded-full bg-red-600 px-6 py-3 text-white font-semibold hover:bg-red-700 transition"
@@ -243,15 +250,36 @@ const AdminNotifications = () => {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3 mb-8">
-          <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
+          <div
+            onClick={() => setStatusFilter((prev) => (prev === 'confirmed' ? 'all' : 'confirmed'))}
+            className={`rounded-3xl border p-6 shadow-sm cursor-pointer transition hover:shadow-md hover:border-green-400 ${
+              statusFilter === 'confirmed'
+                ? 'border-green-400 ring-2 ring-green-400/50 dark:ring-green-400/30 bg-green-50/20 dark:bg-green-950/10'
+                : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900'
+            }`}
+          >
             <p className="text-sm text-neutral-500 dark:text-neutral-400">تم الحجز</p>
             <p className="mt-3 text-3xl font-semibold text-green-600 dark:text-green-300">{bookingCounts.confirmed}</p>
           </div>
-          <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
+          <div
+            onClick={() => setStatusFilter((prev) => (prev === 'pending' ? 'all' : 'pending'))}
+            className={`rounded-3xl border p-6 shadow-sm cursor-pointer transition hover:shadow-md hover:border-yellow-400 ${
+              statusFilter === 'pending'
+                ? 'border-yellow-400 ring-2 ring-yellow-400/50 dark:ring-yellow-400/30 bg-yellow-50/20 dark:bg-yellow-950/10'
+                : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900'
+            }`}
+          >
             <p className="text-sm text-neutral-500 dark:text-neutral-400">معلق</p>
             <p className="mt-3 text-3xl font-semibold text-yellow-600 dark:text-yellow-300">{bookingCounts.pending}</p>
           </div>
-          <div className="rounded-3xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-6 shadow-sm">
+          <div
+            onClick={() => setStatusFilter((prev) => (prev === 'cancelled' ? 'all' : 'cancelled'))}
+            className={`rounded-3xl border p-6 shadow-sm cursor-pointer transition hover:shadow-md hover:border-red-400 ${
+              statusFilter === 'cancelled'
+                ? 'border-red-400 ring-2 ring-red-400/50 dark:ring-red-400/30 bg-red-50/20 dark:bg-red-950/10'
+                : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900'
+            }`}
+          >
             <p className="text-sm text-neutral-500 dark:text-neutral-400">ملغي</p>
             <p className="mt-3 text-3xl font-semibold text-red-600 dark:text-red-300">{bookingCounts.cancelled}</p>
           </div>
@@ -277,7 +305,7 @@ const AdminNotifications = () => {
               </p>
               <button
                 type="button"
-                onClick={() => setSelectedDate('')}
+                onClick={() => { setSelectedDate(''); setStatusFilter('all'); }}
                 className="inline-flex items-center justify-center rounded-full border border-violet-600 bg-white px-6 py-3 text-sm font-semibold text-violet-600 transition hover:bg-violet-50 dark:bg-neutral-950 dark:hover:bg-neutral-900"
               >
                 إظهار الكل
@@ -314,13 +342,33 @@ const AdminNotifications = () => {
                       {booking.passport_image_url && (
                         <div className="mt-3 space-y-3">
                           <img
-                            src={booking.passport_image_url}
+                            src={`${booking.passport_image_url}?token=${getToken()}`}
                             alt="صورة جواز السفر"
                             className="h-32 w-full max-w-[220px] rounded-2xl object-cover border border-neutral-200 dark:border-neutral-800"
                           />
                           <button
                             type="button"
-                            onClick={() => setZoomedPassportUrl(booking.passport_image_url)}
+                            onClick={() => setZoomedPassportUrl(`${booking.passport_image_url}?token=${getToken()}`)}
+                            className="inline-flex items-center justify-center rounded-full border border-violet-600 bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition"
+                          >
+                            تكبير الصورة
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400">رقم الحوالة المالية</p>
+                      <p className="mt-1 font-semibold text-green-600 dark:text-green-400">{booking.payment_ref || '-'}</p>
+                      {booking.payment_image_url && (
+                        <div className="mt-3 space-y-3">
+                          <img
+                            src={`${booking.payment_image_url}?token=${getToken()}`}
+                            alt="إشعار الدفع"
+                            className="h-32 w-full max-w-[220px] rounded-2xl object-cover border border-neutral-200 dark:border-neutral-800"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setZoomedPassportUrl(`${booking.payment_image_url}?token=${getToken()}`)}
                             className="inline-flex items-center justify-center rounded-full border border-violet-600 bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 transition"
                           >
                             تكبير الصورة

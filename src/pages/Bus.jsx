@@ -52,6 +52,9 @@ const Bus = () => {
   const [passport, setPassport] = useState('')
   const [passportImage, setPassportImage] = useState(null)
   const [passportPreview, setPassportPreview] = useState('')
+  const [paymentRef, setPaymentRef] = useState('')
+  const [paymentImage, setPaymentImage] = useState(null)
+  const [paymentPreview, setPaymentPreview] = useState('')
   const [travelDate, setTravelDate] = useState('')
   const [availableDates, setAvailableDates] = useState([])
   const [company, setCompany] = useState('البركة')
@@ -338,6 +341,18 @@ const Bus = () => {
     setPassportPreview(URL.createObjectURL(file))
   }
 
+  const handlePaymentImageChange = (event) => {
+    setLastTicket(null)
+    const file = event.target.files?.[0]
+    if (!file) {
+      setPaymentImage(null)
+      setPaymentPreview('')
+      return
+    }
+    setPaymentImage(file)
+    setPaymentPreview(URL.createObjectURL(file))
+  }
+
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -397,6 +412,17 @@ const Bus = () => {
       setError('حجم الصورة كبير جدًا. الرجاء اختيار صورة أقل من 5 ميجابايت.')
       return
     }
+    // ponytail: Make payment reference and image optional
+    if (paymentImage) {
+      if (!allowedImageTypes.includes(paymentImage.type)) {
+        setError('يُسمح فقط بصور إشعار الحوالة بصيغة JPG أو PNG أو WEBP.')
+        return
+      }
+      if (paymentImage.size > 5 * 1024 * 1024) {
+        setError('حجم صورة إشعار الحوالة كبير جداً. الرجاء اختيار صورة أقل من 5 ميجابايت.')
+        return
+      }
+    }
     if (!seat) {
       setError('يرجى اختيار رقم المقعد من حافلة المقاعد.')
       return
@@ -420,6 +446,13 @@ const Bus = () => {
     formData.append('passportImage', passportImage)
     formData.append('seat', seat)
     formData.append('dob', dob.trim())
+    // ponytail: Append payment details optionally if set
+    if (paymentRef && paymentRef.trim()) {
+      formData.append('paymentRef', paymentRef.trim())
+    }
+    if (paymentImage) {
+      formData.append('paymentImage', paymentImage)
+    }
 
     try {
       if (!csrfToken) {
@@ -468,6 +501,9 @@ const Bus = () => {
       setPassport('')
       setPassportImage(null)
       setPassportPreview('')
+      setPaymentRef('')
+      setPaymentImage(null)
+      setPaymentPreview('')
       setTravelDate('')
       setOrigin('')
       setDestination('')
@@ -591,6 +627,42 @@ const Bus = () => {
                     <img
                       src={passportPreview}
                       alt="معاينة جواز السفر"
+                      className="mt-3 h-40 w-full max-w-xs rounded-2xl object-cover border border-neutral-200 dark:border-neutral-800"
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">رقم الحوالة المالية / إشعار الدفع (اختياري)</label>
+                <input
+                  type="text"
+                  value={paymentRef}
+                  onChange={(e) => handleValChange(setPaymentRef, e.target.value)}
+                  placeholder="أدخل رقم الحوالة أو المرجع المالي"
+                  className="w-full rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 px-4 py-3 text-neutral-900 dark:text-neutral-100 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100 dark:focus:ring-violet-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">صورة إشعار الدفع / الحوالة (اختياري)</label>
+                <div className="space-y-3">
+                  <label htmlFor="paymentImage" className="inline-flex items-center justify-center rounded-full bg-violet-600 px-4 py-3 text-white font-semibold shadow-sm hover:bg-violet-700 transition cursor-pointer">
+                    اختر صورة إشعار الدفع
+                  </label>
+                  <input
+                    id="paymentImage"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handlePaymentImageChange}
+                    className="sr-only"
+                  />
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">ارفع صورة إيصال الدفع أو التحويل المالي لتأكيد الحجز.</p>
+                  {paymentPreview && (
+                    <img
+                      src={paymentPreview}
+                      alt="معاينة إشعار الدفع"
                       className="mt-3 h-40 w-full max-w-xs rounded-2xl object-cover border border-neutral-200 dark:border-neutral-800"
                     />
                   )}
