@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import DatePicker from '../components/DatePicker/DatePicker'
 import { getCsrfToken } from '../utils/csrf'
 import { openPrintWindow } from '../utils/printTicket'
@@ -47,6 +48,7 @@ const getArrivalTime = (timeStr) => {
 }
 
 const Bus = () => {
+  const navigate = useNavigate()
   const [passengerName, setPassengerName] = useState('')
   const [phone, setPhone] = useState('')
   const [passport, setPassport] = useState('')
@@ -515,6 +517,23 @@ const Bus = () => {
     }
   }
 
+  // ponytail: Clear frontend and backend passenger sessions on logout
+  const handleClientLogout = async () => {
+    try {
+      await fetch('/api/client/logout', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+        }
+      })
+    } catch (e) {
+      // ignore
+    }
+    sessionStorage.removeItem('clientPhone')
+    sessionStorage.removeItem('clientName')
+    navigate('/')
+  }
+
   return (
     <main className="pt-[8ch] min-h-[calc(100vh-8ch)] bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100">
       <div className="max-w-6xl mx-auto px-4 md:px-16 lg:px-28 py-16">
@@ -526,19 +545,31 @@ const Bus = () => {
             </p>
           </div>
           {sessionStorage.getItem('clientPhone') && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowMyBookings(true)
-                fetchMyBookings()
-              }}
-              className="shrink-0 inline-flex items-center gap-2 rounded-full bg-violet-600 px-6 py-3 text-white font-semibold shadow-lg shadow-violet-200/30 hover:bg-violet-700 transition"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              حجوزاتي
-            </button>
+            <div className="flex gap-3 shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMyBookings(true)
+                  fetchMyBookings()
+                }}
+                className="inline-flex items-center gap-2 rounded-full bg-violet-600 px-6 py-3 text-white font-semibold shadow-lg shadow-violet-200/30 hover:bg-violet-700 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                حجوزاتي
+              </button>
+              <button
+                type="button"
+                onClick={handleClientLogout}
+                className="inline-flex items-center gap-2 rounded-full bg-red-600 px-6 py-3 text-white font-semibold shadow-lg shadow-red-200/30 hover:bg-red-700 transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                تسجيل الخروج
+              </button>
+            </div>
           )}
         </div>
 
