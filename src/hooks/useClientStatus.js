@@ -13,7 +13,8 @@ export function useClientStatus() {
     try {
       const data = await apiFetchClientStatus()
       if (data.isLoggedIn) {
-        setVerificationStatus(data.verificationStatus)
+        const mappedStatus = data.verificationStatus === 'approved' ? 'verified' : data.verificationStatus
+        setVerificationStatus(mappedStatus)
         if (data.fullname) {
           setPassengerName(data.fullname)
           sessionStorage.setItem('clientName', data.fullname)
