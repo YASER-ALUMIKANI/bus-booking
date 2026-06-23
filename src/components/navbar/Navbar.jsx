@@ -13,10 +13,10 @@ const Navbar = () => {
     const [showInstall, setShowInstall] = React.useState(false);
 
     const navLinks = [
-        { href: "/", label: "Home" },
-        { href: "/about", label: "About" },
-        { href: "/bus", label: "Bus" },
-        { href: "/services", label: "Services" },
+        { href: "/", label: "الرئيسية" },
+        { href: "/about", label: "عن يمن باص" },
+        { href: "/bus", label: "حجز باص" },
+        { href: "/services", label: "خدماتنا" },
     ]
 
     const handleClick = () => {
