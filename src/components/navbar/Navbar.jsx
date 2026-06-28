@@ -15,8 +15,9 @@ const Navbar = () => {
     const navLinks = [
         { href: "/", label: "الرئيسية" },
         { href: "/bus", label: "الحجوزات " },
-        { href: "/about", label: "عن يمن باص" },
+       
         { href: "/services", label: "خدماتنا" },
+         { href: "/about", label: "عن يمن باص" },
     ]
 
     const handleClick = () => {
