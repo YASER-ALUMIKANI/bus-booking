@@ -44,6 +44,11 @@ app.register_blueprint(schedules_bp)
 app.register_blueprint(verification_bp)
 app.register_blueprint(admin_bp)
 
+# Register request logger
+@app.before_request
+def log_request_info():
+    logger.info("[REQUEST] %s %s", request.method, request.path)
+
 # Teardown database connections
 @app.teardown_appcontext
 def close_connection(exception=None):
