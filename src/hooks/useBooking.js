@@ -213,8 +213,20 @@ export function useBooking() {
     try {
       const data = await fetchClientBookings()
       setMyBookings(data.bookings || [])
+      // ponytail: cache retrieved bookings for offline viewing
+      try {
+        localStorage.setItem('yemenbus_my_bookings_cache', JSON.stringify(data.bookings || []))
+      } catch (err) {
+        // ignore
+      }
     } catch (err) {
-      setBookingsError(err.message)
+      // ponytail: fallback to local storage cache if offline
+      const cached = localStorage.getItem('yemenbus_my_bookings_cache')
+      if (cached) {
+        setMyBookings(JSON.parse(cached))
+      } else {
+        setBookingsError(err.message)
+      }
     } finally {
       setLoadingBookings(false)
     }
@@ -457,6 +469,15 @@ export function useBooking() {
       })
 
       const ticketsList = await Promise.all(bookingPromises)
+
+      // ponytail: cache last booked tickets locally for instant offline retrieval
+      try {
+        const existingOffline = JSON.parse(localStorage.getItem('yemenbus_offline_tickets') || '[]')
+        const updatedOffline = [...ticketsList, ...existingOffline].slice(0, 50)
+        localStorage.setItem('yemenbus_offline_tickets', JSON.stringify(updatedOffline))
+      } catch (err) {
+        // ignore storage quota errors silently
+      }
 
       setStatus('success')
       setSuccessMessage(`تم حفظ الحجوزات بنجاح. عدد التذاكر: ${ticketsList.length}`)

@@ -11,6 +11,12 @@
   padding: 0;
   box-sizing: border-box;
   font-family: "Inter", sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
 }
 
 /* Custom Scrollbar */

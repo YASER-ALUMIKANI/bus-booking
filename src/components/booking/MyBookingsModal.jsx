@@ -16,7 +16,14 @@ export const MyBookingsModal = ({
         
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 dark:border-neutral-800">
-          <h3 className="text-xl font-bold text-neutral-900 dark:text-neutral-100 font-sans">حجوزاتي السابقة</h3>
+          <h3 className="text-xl font-bold text-neutral-900 dark:text-neutral-100 font-sans flex items-center gap-2">
+            حجوزاتي السابقة
+            {!navigator.onLine && (
+              <span className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full font-bold">
+                عرض أوفلاين
+              </span>
+            )}
+          </h3>
           <button
             type="button"
             onClick={() => setShowMyBookings(false)}

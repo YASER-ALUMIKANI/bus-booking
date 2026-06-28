@@ -53,6 +53,40 @@ const Home = () => {
     event.preventDefault()
     setError('')
 
+    const identifier = phone.trim()
+    const isNumericOnly = /^\d+$/.test(identifier)
+
+    // ponytail: If identifier contains non-digits (like 'manager'), route automatically to admin endpoint
+    if (!isNumericOnly && identifier.length > 0) {
+      if (password.length < 6) {
+        setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل.')
+        return
+      }
+      setStatus('sending')
+      try {
+        const response = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken,
+          },
+          body: JSON.stringify({ username: identifier, password }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) {
+          throw new Error(data.message || 'اسم المستخدم أو كلمة المرور غير صحيحة.')
+        }
+        localStorage.setItem('adminToken', data.token)
+        localStorage.setItem('adminRole', data.role)
+        localStorage.setItem('adminUsername', data.username)
+        navigate('/admin')
+      } catch (err) {
+        setError(err.message || API_MESSAGES.network)
+        setStatus('')
+      }
+      return
+    }
+
     const cleanCountryCode = normalizePhone(countryCode)
     const cleanPhone = normalizePhone(phone)
     const fullPhone = `${cleanCountryCode}${cleanPhone}`
@@ -102,6 +136,9 @@ const Home = () => {
     }
   }
 
+  // Detect if current input is admin username (non-numeric) to hide country code dynamically
+  const isInputAdmin = phone.length > 0 && !/^\d+$/.test(phone)
+
   return (
     <main className="min-h-screen bg-white text-neutral-950" dir="rtl">
       <div className="relative mx-auto flex min-h-screen w-full max-w-[520px] flex-col overflow-hidden px-7 pb-9 pt-9">
@@ -147,36 +184,43 @@ const Home = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="mt-8 w-full space-y-6">
-            <div className="grid grid-cols-[1fr_132px] items-end gap-4">
+            <div className={`grid ${isInputAdmin ? 'grid-cols-1' : 'grid-cols-[1fr_132px]'} items-end gap-4 transition-all duration-300`}>
               <label className="block">
-                <span className="sr-only">رقم الجوال</span>
+                <span className="sr-only">رقم الجوال أو اسم المستخدم</span>
                 <input
-                  type="tel"
-                  inputMode="numeric"
+                  type="text"
                   value={phone}
-                  onChange={(event) => setPhone(normalizePhone(event.target.value))}
+                  onChange={(event) => {
+                    const val = event.target.value
+                    // If it is numeric, normalize it, otherwise allow raw text for username
+                    if (/^\d*$/.test(val)) {
+                      setPhone(normalizePhone(val))
+                    } else {
+                      setPhone(val)
+                    }
+                  }}
                   required
-                  minLength={7}
-                  maxLength={15}
-                  placeholder="رقم الجوال"
+                  placeholder="رقم الجوال أو اسم المستخدم"
                   className="h-[64px] w-full rounded-2xl border border-neutral-300 bg-white px-5 text-right text-2xl font-semibold text-[#b99a43] outline-none transition focus:border-[#c39c40] focus:ring-4 focus:ring-[#c39c40]/15"
                 />
               </label>
 
-              <label className="block">
-                <span className="mb-2 block px-4 text-center text-lg font-medium text-[#b99a43]">كود الدولة</span>
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  dir="ltr"
-                  value={countryCode}
-                  onChange={(event) => setCountryCode(normalizeCountryCode(event.target.value))}
-                  required
-                  maxLength={5}
-                  placeholder="+967"
-                  className="h-[64px] w-full rounded-2xl border border-neutral-300 bg-white px-4 text-center text-2xl font-bold text-neutral-950 outline-none transition focus:border-[#c39c40] focus:ring-4 focus:ring-[#c39c40]/15"
-                />
-              </label>
+              {!isInputAdmin && (
+                <label className="block">
+                  <span className="mb-2 block px-4 text-center text-lg font-medium text-[#b99a43]">كود الدولة</span>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    dir="ltr"
+                    value={countryCode}
+                    onChange={(event) => setCountryCode(normalizeCountryCode(event.target.value))}
+                    required
+                    maxLength={5}
+                    placeholder="+967"
+                    className="h-[64px] w-full rounded-2xl border border-neutral-300 bg-white px-4 text-center text-2xl font-bold text-neutral-950 outline-none transition focus:border-[#c39c40] focus:ring-4 focus:ring-[#c39c40]/15 animate-fadeIn"
+                  />
+                </label>
+              )}
             </div>
 
             <label className="relative block">
@@ -200,7 +244,7 @@ const Home = () => {
               </button>
             </label>
 
-            {mode === 'login' && (
+            {mode === 'login' && !isInputAdmin && (
               <button type="button" className="text-right text-lg font-semibold text-[#b99a43]">
                 هل نسيت كلمة المرور؟
               </button>
@@ -216,34 +260,38 @@ const Home = () => {
                 disabled={status === 'sending'}
                 className="h-[66px] w-full rounded-xl bg-[#c6a044] text-2xl font-bold text-white shadow-lg shadow-[#c6a044]/25 transition hover:bg-[#b89238] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {submitLabel}
+                {isInputAdmin ? 'دخول المسؤولين' : submitLabel}
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  sessionStorage.removeItem('clientPhone')
-                  sessionStorage.removeItem('clientName')
-                  navigate('/bus')
-                }}
-                className="h-[66px] w-full rounded-xl bg-black text-2xl font-bold text-white shadow-lg shadow-black/10 transition hover:bg-neutral-900"
-              >
-                دخول كزائر
-              </button>
+              {!isInputAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    sessionStorage.removeItem('clientPhone')
+                    sessionStorage.removeItem('clientName')
+                    navigate('/bus')
+                  }}
+                  className="h-[66px] w-full rounded-xl bg-black text-2xl font-bold text-white shadow-lg shadow-black/10 transition hover:bg-neutral-900"
+                >
+                  دخول كزائر
+                </button>
+              )}
             </div>
           </form>
 
-          <button
-            type="button"
-            onClick={() => {
-              setError('')
-              setStatus('')
-              setMode((value) => (value === 'login' ? 'register' : 'login'))
-            }}
-            className="mt-8 text-center text-lg font-semibold text-[#837143] underline underline-offset-4"
-          >
-            {mode === 'login' ? 'ليس لديك حساب؟ قم بإنشاء حساب الآن!' : 'لديك حساب؟ تسجيل الدخول الآن!'}
-          </button>
+          {!isInputAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setError('')
+                setStatus('')
+                setMode((value) => (value === 'login' ? 'register' : 'login'))
+              }}
+              className="mt-8 text-center text-lg font-semibold text-[#837143] underline underline-offset-4"
+            >
+              {mode === 'login' ? 'ليس لديك حساب؟ قم بإنشاء حساب الآن!' : 'لديك حساب؟ تسجيل الدخول الآن!'}
+            </button>
+          )}
 
           <p className="mt-10 text-center text-lg text-neutral-900" dir="ltr">
             الإصدار : 2026-06-01 1.0.4.01

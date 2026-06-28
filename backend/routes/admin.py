@@ -116,3 +116,64 @@ def reject_verification(request_id: int):
     db.commit()
     logger.info("[ADMIN REJECT] Verification request %d rejected for client %s.", request_id, row["phone"])
     return jsonify({"message": "تم رفض طلب التوثيق."}), 200
+
+# ponytail: Dangerous Zone endpoints - Manager Only
+@admin_bp.route("/api/admin/danger/clear-db", methods=["POST"])
+def danger_clear_db():
+    current_user = get_current_user()
+    if not current_user or current_user["role"] != "manager":
+        return jsonify({"message": "غير مصرح. يجب أن تكون المدير لتنفيذ هذا الإجراء الحساس."}), 403
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+
+    db = get_db()
+    try:
+        db.execute("DELETE FROM bookings")
+        db.execute("DELETE FROM schedules")
+        db.commit()
+        logger.warning("[DANGER ZONE] Database bookings and schedules cleared by manager.")
+        return jsonify({"message": "تم تفريغ وتصفية جداول الحجوزات والرحلات بنجاح."}), 200
+    except Exception as e:
+        db.rollback()
+        return jsonify({"message": f"حدث خطأ أثناء التصفية: {str(e)}"}), 500
+
+@admin_bp.route("/api/admin/danger/clear-clients", methods=["POST"])
+def danger_clear_clients():
+    current_user = get_current_user()
+    if not current_user or current_user["role"] != "manager":
+        return jsonify({"message": "غير مصرح. يجب أن تكون المدير لتنفيذ هذا الإجراء الحساس."}), 403
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+
+    db = get_db()
+    try:
+        db.execute("DELETE FROM client_users")
+        db.execute("DELETE FROM verification_requests")
+        db.execute("DELETE FROM bookings") # bookings depend on clients
+        db.commit()
+        logger.warning("[DANGER ZONE] All client accounts and related bookings cleared by manager.")
+        return jsonify({"message": "تم حذف جميع حسابات العملاء والبيانات المرتبطة بهم بنجاح."}), 200
+    except Exception as e:
+        db.rollback()
+        return jsonify({"message": f"حدث خطأ أثناء الحذف: {str(e)}"}), 500
+
+@admin_bp.route("/api/admin/danger/delete-admin/<username>", methods=["DELETE"])
+def danger_delete_admin(username: str):
+    current_user = get_current_user()
+    if not current_user or current_user["role"] != "manager":
+        return jsonify({"message": "غير مصرح. يجب أن تكون المدير لتنفيذ هذا الإجراء الحساس."}), 403
+    if not require_csrf_token():
+        return jsonify({"message": "CSRF token missing or invalid."}), 403
+
+    if username == current_user["username"]:
+        return jsonify({"message": "لا يمكنك حذف حسابك الحالي كمدير نظام."}), 400
+
+    db = get_db()
+    try:
+        db.execute("DELETE FROM admin_users WHERE username = ?", (username,))
+        db.commit()
+        logger.warning("[DANGER ZONE] Admin user %s deleted by manager.", username)
+        return jsonify({"message": f"تم حذف المشرف {username} بنجاح."}), 200
+    except Exception as e:
+        db.rollback()
+        return jsonify({"message": f"حدث خطأ أثناء حذف المشرف: {str(e)}"}), 500

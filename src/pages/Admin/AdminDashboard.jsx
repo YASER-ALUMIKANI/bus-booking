@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getCsrfToken } from '../../utils/csrf'
+import AdminSchedules from './AdminSchedules'
 
 const AdminDashboard = () => {
   const [bookings, setBookings] = useState([])
@@ -225,6 +226,77 @@ const AdminDashboard = () => {
     }
     loadToken()
   }, [])
+
+  // ponytail: Dangerous Zone action handlers
+  const handleClearDatabase = async () => {
+    if (!window.confirm("تحذير أمني خطير: هل أنت متأكد من تصفية وحذف جميع الحجوزات وجداول الرحلات من قاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء!")) return
+    const confirmation = window.prompt("لتأكيد الحذف، يرجى كتابة الكلمة 'DANGER' في الخانة:")
+    if (confirmation !== 'DANGER') {
+      alert("تم إلغاء العملية لعدم مطابقة كلمة التأكيد.")
+      return
+    }
+    const token = getToken()
+    try {
+      const response = await fetch('/api/admin/danger/clear-db', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          Authorization: `Bearer ${token}`
+        }
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message)
+      alert(data.message)
+      fetchBookings()
+    } catch (err) {
+      alert(err.message || "فشلت عملية التصفية.")
+    }
+  }
+
+  const handleClearClients = async () => {
+    if (!window.confirm("تحذير أمني خطير: هل أنت متأكد من حذف جميع حسابات المشتركين والعملاء نهائياً؟ هذا الإجراء سيحذف أيضاً جميع حجوزاتهم!")) return
+    const confirmation = window.prompt("لتأكيد الحذف، يرجى كتابة الكلمة 'DELETE ALL' في الخانة:")
+    if (confirmation !== 'DELETE ALL') {
+      alert("تم إلغاء العملية لعدم مطابقة كلمة التأكيد.")
+      return
+    }
+    const token = getToken()
+    try {
+      const response = await fetch('/api/admin/danger/clear-clients', {
+        method: 'POST',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          Authorization: `Bearer ${token}`
+        }
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message)
+      alert(data.message)
+      fetchBookings()
+    } catch (err) {
+      alert(err.message || "فشلت عملية حذف العملاء.")
+    }
+  }
+
+  const handleDeleteAdmin = async (targetUsername) => {
+    if (!window.confirm(`هل أنت متأكد من إلغاء وحذف صلاحيات المشرف (${targetUsername}) نهائياً؟`)) return
+    const token = getToken()
+    try {
+      const response = await fetch(`/api/admin/danger/delete-admin/${targetUsername}`, {
+        method: 'DELETE',
+        headers: {
+          'X-CSRF-Token': csrfToken,
+          Authorization: `Bearer ${token}`
+        }
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.message)
+      alert(data.message)
+      fetchAdminUsers(token)
+    } catch (err) {
+      alert(err.message || "فشلت عملية حذف المشرف.")
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('adminToken')
@@ -481,15 +553,19 @@ const AdminDashboard = () => {
               </svg>
               طلبات توثيق الحسابات
             </button>
-            <Link
-              to="/admin/schedules"
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 transition"
+            <button
+              onClick={() => setActiveTab('schedules')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition ${
+                activeTab === 'schedules'
+                  ? 'bg-orange-600 text-white shadow-md'
+                  : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+              }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg xmlns="http://www.w3.org/2050/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
               </svg>
               إدارة الجداول والمواعيد
-            </Link>
+            </button>
             <Link
               to="/admin"
               className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 transition"
@@ -499,6 +575,21 @@ const AdminDashboard = () => {
               </svg>
               إشعارات وتذاكر الركاب
             </Link>
+            {role === 'manager' && (
+              <button
+                onClick={() => setActiveTab('danger')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition ${
+                  activeTab === 'danger'
+                    ? 'bg-red-650 text-white shadow-md'
+                    : 'text-red-500 hover:bg-red-950/20 hover:text-red-400'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                منطقة الخطر (Dangerous Zone)
+              </button>
+            )}
           </nav>
           <div className="p-4 border-t border-slate-800/80 text-xs text-slate-500 text-center font-mono">
             YemenBus © 2026
@@ -624,8 +715,8 @@ const AdminDashboard = () => {
                           <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm">الرحلات وجداول العمل (Schedules)</h3>
                         </div>
                         <div className="p-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                          <Link
-                            to="/admin/schedules"
+                          <button
+                            onClick={() => setActiveTab('schedules')}
                             className="flex flex-col items-center justify-center p-5 rounded-2xl border border-slate-100 dark:border-neutral-800 hover:border-orange-500 dark:hover:border-orange-500 bg-slate-50/50 dark:bg-neutral-950/40 hover:bg-white transition text-center group"
                           >
                             <div className="w-12 h-12 rounded-full bg-orange-500/10 text-orange-600 flex items-center justify-center mb-3 group-hover:scale-110 transition">
@@ -634,7 +725,7 @@ const AdminDashboard = () => {
                               </svg>
                             </div>
                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">إدارة مواعيد الرحلات</span>
-                          </Link>
+                          </button>
                         </div>
                       </div>
 
@@ -1028,6 +1119,116 @@ const AdminDashboard = () => {
                         </table>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {activeTab === 'schedules' && (
+                  <div className="bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-3xl p-6 shadow-sm animate-fadeIn">
+                    <AdminSchedules isDashboard={true} />
+                  </div>
+                )}
+
+                {activeTab === 'danger' && (
+                  <div className="space-y-6 animate-fadeIn">
+                    <div className="bg-gradient-to-r from-red-600 to-rose-700 text-white rounded-3xl p-8 shadow-lg relative overflow-hidden">
+                      <div className="absolute top-0 left-0 translate-x-[-10%] translate-y-[-10%] w-64 h-64 bg-white/10 rounded-full blur-2xl"></div>
+                      <h2 className="text-3xl font-black mb-2 font-sans">منطقة الإجراءات الحساسة (Dangerous Zone)</h2>
+                      <p className="text-red-100 max-w-2xl text-sm leading-6">
+                        تحذير: تحتوي هذه الصفحة على عمليات تصفية وحذف لبيانات النظام وقاعدة البيانات بالكامل. لا تنفذ أي إجراء إلا إذا كنت متأكداً تماماً مما تفعله.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      
+                      {/* Database Cleanup Panel */}
+                      <div className="bg-white dark:bg-neutral-900 border border-red-200 dark:border-red-950/40 rounded-3xl overflow-hidden shadow-sm">
+                        <div className="bg-red-50 dark:bg-red-950/20 px-6 py-4 border-b border-red-100 dark:border-red-950/30 flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
+                          <h3 className="font-bold text-red-700 dark:text-red-400 text-sm">تصفية قاعدة البيانات (Clear DB)</h3>
+                        </div>
+                        <div className="p-6 space-y-4">
+                          <p className="text-xs text-slate-500 leading-5">
+                            هذا الإجراء سيقوم بمسح كافة الحجوزات المسجلة والرحلات الزمنية المضافة. سيتم تصفية الجداول بالكامل لتصبح فارغة تماماً.
+                          </p>
+                          <button
+                            onClick={handleClearDatabase}
+                            className="w-full bg-red-650 hover:bg-red-700 text-white font-bold text-xs py-3 px-4 rounded-xl transition shadow-sm"
+                          >
+                            تصفية الحجوزات والرحلات نهائياً
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Clients Cleanup Panel */}
+                      <div className="bg-white dark:bg-neutral-900 border border-red-200 dark:border-red-950/40 rounded-3xl overflow-hidden shadow-sm">
+                        <div className="bg-red-50 dark:bg-red-950/20 px-6 py-4 border-b border-red-100 dark:border-red-950/30 flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
+                          <h3 className="font-bold text-red-700 dark:text-red-400 text-sm">تصفية حسابات المشتركين (Delete Clients)</h3>
+                        </div>
+                        <div className="p-6 space-y-4">
+                          <p className="text-xs text-slate-500 leading-5">
+                            سيقوم هذا الإجراء بحذف جميع حسابات العملاء المسجلين، بالإضافة إلى إتلاف كافة طلبات التوثيق والهويات وحجوزات السفر الخاصة بهم.
+                          </p>
+                          <button
+                            onClick={handleClearClients}
+                            className="w-full bg-red-650 hover:bg-red-700 text-white font-bold text-xs py-3 px-4 rounded-xl transition shadow-sm"
+                          >
+                            مسح وحذف كافة حسابات المشتركين
+                          </button>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Admin Deletion Panel */}
+                    <div className="bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-3xl overflow-hidden shadow-sm">
+                      <div className="bg-slate-50 dark:bg-neutral-800/50 px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                        <h3 className="font-bold text-slate-800 dark:text-slate-200 text-sm">إدارة وإلغاء حسابات المشرفين (Manage Admins)</h3>
+                      </div>
+                      <div className="p-6">
+                        {adminUsers.length === 0 ? (
+                          <p className="text-xs text-slate-500">لا يوجد مشرفين آخرين حالياً.</p>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-right text-xs leading-5" dir="rtl">
+                              <thead>
+                                <tr className="border-b border-slate-100 dark:border-neutral-800 text-slate-400 font-bold">
+                                  <th className="p-3">اسم المستخدم</th>
+                                  <th className="p-3">صلاحيات الحساب</th>
+                                  <th className="p-3 text-center">الإجراء</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {adminUsers.map((user) => (
+                                  <tr key={user.username} className="border-b border-slate-50 dark:border-neutral-850 hover:bg-slate-50/50 dark:hover:bg-neutral-950/20">
+                                    <td className="p-3 font-semibold text-slate-700 dark:text-slate-300">{user.username}</td>
+                                    <td className="p-3">
+                                      {user.role === 'manager' ? (
+                                        <span className="bg-purple-100 text-purple-700 dark:bg-purple-950/30 dark:text-purple-300 px-2 py-0.5 rounded-full font-bold">مدير نظام</span>
+                                      ) : (
+                                        <span className="bg-blue-100 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 px-2 py-0.5 rounded-full font-bold">موظف</span>
+                                      )}
+                                    </td>
+                                    <td className="p-3 text-center">
+                                      {user.username === localStorage.getItem('adminUsername') ? (
+                                        <span className="text-slate-400 font-bold">الحساب الحالي</span>
+                                      ) : (
+                                        <button
+                                          onClick={() => handleDeleteAdmin(user.username)}
+                                          className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-950/20 dark:text-red-400 dark:hover:bg-red-950/40 px-3 py-1.5 rounded-lg font-bold transition"
+                                        >
+                                          حذف وإلغاء الصلاحية
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
