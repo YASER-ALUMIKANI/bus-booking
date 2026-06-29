@@ -136,7 +136,6 @@ const Home = () => {
     }
   }
 
-  // Detect if current input is admin username (non-numeric) to hide country code dynamically
   const isInputAdmin = phone.length > 0 && !/^\d+$/.test(phone)
 
   return (
@@ -192,7 +191,6 @@ const Home = () => {
                   value={phone}
                   onChange={(event) => {
                     const val = event.target.value
-                    // If it is numeric, normalize it, otherwise allow raw text for username
                     if (/^\d*$/.test(val)) {
                       setPhone(normalizePhone(val))
                     } else {
