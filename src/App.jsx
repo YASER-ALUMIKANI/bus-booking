@@ -30,6 +30,18 @@ function AppShell() {
         <Route path='/admin/schedules' element={<AdminSchedules />} />
         <Route path='*' element={<Home />} />
       </Routes>
+
+      <footer className="w-full py-4 mt-auto border-t border-neutral-200 dark:border-neutral-800 bg-neutral-100/50 dark:bg-neutral-900/50 text-center text-xs text-neutral-500 dark:text-neutral-400 font-sans z-10">
+        Developed for Yemen Bus by{' '}
+        <a
+          href="https://www.linkedin.com/in/yaser-alhumikani-412042319"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-orange-500 hover:text-orange-600 dark:text-orange-400 dark:hover:text-orange-300 transition-colors font-bold underline"
+        >
+          Y-Tech
+        </a>
+      </footer>
     </div>
   )
 }
